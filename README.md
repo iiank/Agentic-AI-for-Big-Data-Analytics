@@ -44,10 +44,18 @@ git push origin main                                   # Push to remote git repo
         <td><a href="https://hadoop.apache.org/release/3.3.6.html">hadoop-3.3.6.tar.gz</a></td>
     </tr>
     <tr>
-        <td>Hadoop bin file</td>
-        <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6/bin">hadoop-3.3.6 bin</a></td>
+        <td>Hadoop bin folder fix</td>
+        <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6">hadoop-3.3.6 bin fix</a></td>
+    </tr>
+    <tr>
+        <td>WinRAR</td>
+        <td><a href="https://www.win-rar.com/postdownload.html?&L=0">WinRAR</a></td>
     </tr>
 </table>
+
+### Installation process
+1. Load WinRAR with **administrator rights**, and extract `hadoop-3.3.6.tar.gz` into a folder
+2. After extraction, replace the existing bin folder with the one from `Hadoop bin folder fix`
 
 ### Edit Environment Variables
 Under the Windows search bar, search for "View advanced system settings". Under "Environment Variables", create 2 new variables under "System Variables": `JAVA_HOME` and `HADOOP_HOME`
