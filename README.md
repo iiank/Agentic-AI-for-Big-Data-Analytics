@@ -41,11 +41,11 @@ git push origin main                                   # Push to remote git repo
     </tr>
     <tr>
         <td>Hadoop</td>
-        <td><a href="https://hadoop.apache.org/release/3.3.6.html"></a>hadoop-3.3.6.tar.gz</td>
+        <td><a href="https://hadoop.apache.org/release/3.3.6.html">hadoop-3.3.6.tar.gz</a></td>
     </tr>
     <tr>
         <td>Hadoop bin file</td>
-        <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6/bin"></a>hadoop-3.3.6 bin</td>
+        <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6/bin">hadoop-3.3.6 bin</a></td>
     </tr>
 </table>
 
@@ -53,11 +53,15 @@ git push origin main                                   # Push to remote git repo
 Under the Windows search bar, search for "View advanced system settings". Under "Environment Variables", create 2 new variables under "System Variables": `JAVA_HOME` and `HADOOP_HOME`
 
 `JAVA_HOME`
+
 Variable name:  JAVA_HOME
+
 Variable value: path/to/jdk/17 (Example: C:\javajdk\jdk-17.0.0.1)
 
 `HADOOP_HOME`
+
 Variable name:  HADOOP_HOME
+
 Variable value: path/to/hadoop/3.3.6 (Example: C:\hadoop\hadoop-3.3.6)
 
 Under `Path`, Add 2 new variables: %JAVA_HOME%\bin and  %HADOOP_HOME%\bin
