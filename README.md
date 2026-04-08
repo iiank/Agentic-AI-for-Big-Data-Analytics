@@ -52,21 +52,17 @@ git push origin main                                   # Push to remote git repo
 ### Edit Environment Variables
 Under the Windows search bar, search for "View advanced system settings". Under "Environment Variables", create 2 new variables under "System Variables": `JAVA_HOME` and `HADOOP_HOME`
 
-`JAVA_HOME`
-
-Variable name:  JAVA_HOME
-
+`JAVA_HOME`  
+Variable name:  JAVA_HOME  
 Variable value: path/to/jdk/17 (Example: C:\javajdk\jdk-17.0.0.1)
 
-`HADOOP_HOME`
-
-Variable name:  HADOOP_HOME
-
+`HADOOP_HOME`  
+Variable name:  HADOOP_HOME  
 Variable value: path/to/hadoop/3.3.6 (Example: C:\hadoop\hadoop-3.3.6)
 
 Under `Path`, Add 2 new variables: %JAVA_HOME%\bin and  %HADOOP_HOME%\bin
 
-### SparkSession
+## SparkSession
 ```sh
 spark = SparkSession.builder \
     .master("local[*]") \
