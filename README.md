@@ -8,14 +8,61 @@ git remote add origin https://github.com/iiank/BT4221_US_Accidents.git
 git pull origin main
 ```
 
+## Register Github account
+```sh
+git config --global user.email "you@example.com"
+git config --global user.name "github username"
+```
+
 ## Before pushing commits (IMPORTANT!)
 ### Ensure Local Git Repository is in sync with Remote Git Repository
 ```sh
-git branch -m main
-git pull origin main
+git branch -m main          # To ensure you're in main branch
+git pull origin main        # Pull any recent commits from other developers
 ```
 
-## Base Spark Setup
+### Pushing commits
+```sh
+git add .                                              # To stage recent edits
+git commit -m "brief description of commit"            # To commit edits with description
+git push origin main                                   # Push to remote git repo
+```
+
+## Running the project locally (Windows)
+### Dependencies
+<table>
+    <tr>
+        <td>Dependency</td>
+        <td>Link</td>
+    </tr>
+    <tr>
+        <td>Java</td>
+        <td><a href="https://jdk.java.net//java-se-ri/17-MR1">jdk17.0.0.1</a></td>
+    </tr>
+    <tr>
+        <td>Hadoop</td>
+        <td><a href="https://hadoop.apache.org/release/3.3.6.html"></a>hadoop-3.3.6.tar.gz</td>
+    </tr>
+    <tr>
+        <td>Hadoop bin file</td>
+        <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6/bin"></a>hadoop-3.3.6 bin</td>
+    </tr>
+</table>
+
+### Edit Environment Variables
+Under the Windows search bar, search for "View advanced system settings". Under "Environment Variables", create 2 new variables under "System Variables": `JAVA_HOME` and `HADOOP_HOME`
+
+`JAVA_HOME`
+Variable name:  JAVA_HOME
+Variable value: path/to/jdk/17 (Example: C:\javajdk\jdk-17.0.0.1)
+
+`HADOOP_HOME`
+Variable name:  HADOOP_HOME
+Variable value: path/to/hadoop/3.3.6 (Example: C:\hadoop\hadoop-3.3.6)
+
+Under `Path`, Add 2 new variables: %JAVA_HOME%\bin and  %HADOOP_HOME%\bin
+
+### SparkSession
 ```sh
 spark = SparkSession.builder \
     .master("local[*]") \
