@@ -71,8 +71,9 @@ def build_model_selection_context(state: AgentState) -> Dict:
         "feature_cols":       state["feature_cols"],
         "class_weight_ratio": profile.get("class_weight_ratio"),
         "majority_class_pct": majority_pct,
-        "resampling_note":    "SMOTETomek is applied automatically — class imbalance is handled upstream. Focus model selection on architecture fit.",
-        "spark_mode":         "local[*] — keep each model's grid to 4-6 combinations",
+        "resampling_note":    "Majority class is downsampled to match minority (50:50) automatically — class imbalance is handled upstream. Focus model selection on architecture fit",
+        # "resampling_note":    "SMOTETomek is applied automatically — class imbalance is handled upstream. Focus model selection on architecture fit.",
+        "spark_mode":         "local[*] — keenp each model's grid to 4-6 combinations",
         "available_models": {
             name: {
                 "task":           info["task"],
@@ -196,6 +197,10 @@ def training_node(state: AgentState) -> AgentState:
             model_name=model_name,
             param_grid_spec=param_grid,
             feature_cols=state["feature_cols"],
+            class_counts={
+                int(k): v["count"]
+                for k, v in state["post_cleaning_profile"]["class_distribution"].items()
+            },
         )
         state[f"{role}_results"] = results
 

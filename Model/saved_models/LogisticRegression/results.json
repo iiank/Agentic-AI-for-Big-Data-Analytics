@@ -1,6 +1,6 @@
 {
   "model_name": "LogisticRegression",
-  "auc": 0.669,
+  "auc": 0.6693,
   "best_params": {
     "regParam": 0.01,
     "elasticNetParam": 0.0,

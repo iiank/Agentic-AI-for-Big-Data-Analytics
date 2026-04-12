@@ -218,8 +218,8 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Dataset folder
-dataset
-saved_models
+dataset/
+Model/saved_models/
 
 # Data files
 *.parquet
