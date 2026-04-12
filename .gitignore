@@ -221,3 +221,4 @@ dataset
 *.parquet
 *.csv
 *.csv.gz
+saved_models

@@ -28,10 +28,11 @@ Select only from the classification models below. All are PySpark MLlib classifi
 
 Select a PRIMARY and SECONDARY model to compare. Choose the pair that best balances these four criteria:
 
-- **Performance** — expected predictive power on tabular, mixed-feature data
+- **Performance** — expected predictive power on tabular, mixed-feature data; if dataset complexity is high (high num of features), the model chosen should be sufficiently complex
 - **Interpretability** — how explainable the model is (LogisticRegression > RandomForestClassifier > GBTClassifier)
 - **Diversity** — the pair should differ enough in architecture that the comparison is informative; avoid two models of the same family
 - **Speed** — training time matters but is not the primary constraint; all models are viable on ~350K rows post-resampling
+
 
 Guidelines:
 - **Class imbalance is handled upstream** via SMOTETomek resampling — you do not need to account for it in model selection.
