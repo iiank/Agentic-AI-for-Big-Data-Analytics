@@ -53,7 +53,7 @@ git push origin main                                   # Push to remote git repo
     </tr>
 </table>
 
-### Installation process
+### Installation process (Windows)
 1. Load WinRAR with **administrator rights**, and extract `hadoop-3.3.6.tar.gz` into a folder
 2. After extraction, replace the existing bin folder with the one from `Hadoop bin folder fix`
 
