@@ -1,3 +1,5 @@
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -215,4 +217,13 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Dataset folder
 dataset
+saved_models
+
+# Data files
+*.parquet
+*.csv
+*.csv.gz
+
+test.py
