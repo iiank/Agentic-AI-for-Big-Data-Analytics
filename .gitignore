@@ -219,7 +219,7 @@ __marimo__/
 
 # Dataset folder
 dataset
-Model/saved_models
+saved_models
 
 # Data files
 *.parquet
