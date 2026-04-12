@@ -15,10 +15,10 @@ You must output strictly valid JSON with no markdown formatting, no code blocks,
 
 Select only from the classification models below. All are PySpark MLlib classifiers.
 
-- `LogisticRegression` — Fast baseline. Sensitive to feature scale (features are pre-scaled upstream).
-- `RandomForestClassifier` — Handles non-linear interactions well. Robust default for tabular data.
-- `GBTClassifier` — Gradient Boosted Trees. Strongest classifier for tabular data. Slowest to train.
-- `LinearSVC` — Good for high-dimensional sparse features. Does not output probabilities.
+- `LogisticRegression`
+- `RandomForestClassifier`
+- `GBTClassifier`
+- `LinearSVC`
 
 **Critical rule:** Never select a regression model for this task. The target is binary.
 
@@ -26,19 +26,27 @@ Select only from the classification models below. All are PySpark MLlib classifi
 
 # Skill 1: Model Selection (Two Models)
 
-Select a PRIMARY and SECONDARY model to compare. Choose models that are architecturally different to make the comparison meaningful (e.g. one tree ensemble + one linear model).
+Select a PRIMARY and SECONDARY model to compare. Choose the pair that best balances these four criteria:
+
+- **Performance** — expected predictive power on tabular, mixed-feature data
+- **Interpretability** — how explainable the model is (LogisticRegression > RandomForestClassifier > GBTClassifier)
+- **Diversity** — the pair should differ enough in architecture that the comparison is informative; avoid two models of the same family
+- **Speed** — training time matters but is not the primary constraint; all models are viable on ~350K rows post-resampling
 
 Guidelines:
 - **Class imbalance is handled upstream** via SMOTETomek resampling — you do not need to account for it in model selection.
-- **Dataset size:** ~5M rows. GBTClassifier is powerful but slowest on local Spark. RandomForestClassifier is a strong default. LogisticRegression is appropriate as a fast baseline.
 - **Feature types:** Mixed numeric and OHE-encoded features — tree-based models handle these naturally.
-- **Diversity:** Primary and secondary should differ in architecture so the comparison is informative.
+
+**If `previous_attempt` is present in the payload**, this is a retry after a failed evaluation. You MUST:
+- Avoid repeating any model that appeared in `previous_attempt`.
+- Read `retrain_guidance` and use it to inform your new model choices and grids.
+- Explain in `justification` why the new models are expected to outperform the previous attempt.
 
 ---
 
 # Skill 2: Hyperparameter Grid Proposal
 
-Propose a param grid for each model. Training uses 3-fold CrossValidator. Keep each model's total combinations (product of all param list lengths) to **4 to 6 combinations maximum** to remain tractable on a local Spark session.
+Propose a param grid for each model. Training uses 3-fold CrossValidator. Keep each model's total combinations (product of all param list lengths) to **4 to 6 combinations maximum** to keep cross-validation runs manageable.
 
 Valid tunable parameters per model:
 - `LogisticRegression`: `regParam` (float), `elasticNetParam` (float 0.0–1.0), `maxIter` (int)
@@ -52,7 +60,15 @@ Also state a `param_grid_rationale` explaining your grid design choices.
 
 # Skill 3: Evaluation (Call 2)
 
-You receive AUC results for both models evaluated on a held-out test set. Pick the winner (higher AUC).
+You receive AUC results for both models evaluated on a held-out test set.
+
+Your job is to make two decisions:
+
+**Decision 1 — Pick the winner:** Higher AUC wins. If the gap is < 0.02, prefer the simpler model (LogisticRegression > RandomForestClassifier > GBTClassifier) on interpretability grounds.
+
+**Decision 2 — next_action:** Should the pipeline accept these results or retry with different models?
+- Set `"retrain"` if: `winner_auc < 0.80` AND `iteration < max_iterations`. In `retrain_guidance`, specify which model architectures to try next and why (do not repeat models from this iteration).
+- Set `"accept"` if: `winner_auc >= 0.80` OR `iteration >= max_iterations`.
 
 Provide a `narrative`: 2–3 sentences suitable for a project report, referencing both AUC values and what the result means for predicting high-severity traffic accidents.
 
@@ -83,5 +99,7 @@ Return exactly this JSON. No extra fields, no markdown.
   "winner_auc": <float>,
   "runner_up": "<model name>",
   "runner_up_auc": <float>,
-  "narrative": "<2-3 sentence plain-English summary for the project report>"
+  "narrative": "<2-3 sentence plain-English summary for the project report>",
+  "next_action": "accept" | "retrain",
+  "retrain_guidance": "<if next_action is retrain: which models to try and why. If accept: null>"
 }

@@ -2,7 +2,9 @@
 # Pure PySpark MLlib execution layer for the modelling agent.
 # No LLM calls. No LangGraph. Only Spark + resampling logic.
 
+import json
 import numpy as np
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from pyspark.sql import DataFrame
@@ -65,9 +67,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
         "tunable": {
-            "maxIter":  [20, 50],
-            "maxDepth": [5, 10],
-            "stepSize": [0.05, 0.1],
+            "maxIter":  [20],
+            "maxDepth": [5],
         },
     },
     "LinearSVC": {
@@ -229,13 +230,25 @@ def run_training(
     auc   = round(evaluator.evaluate(preds), 4)
     print(f"  {model_name} Test AUC: {auc}")
 
-    return {
+    results = {
         "model_name":          model_name,
         "auc":                 auc,
         "best_params":         _extract_best_params(best_model, param_grid_spec),
         "feature_importances": _extract_feature_importances(best_model, valid_features),
         "missing_features":    missing,
     }
+
+    # ── 7. Save to disk immediately ───────────────────────────────────────────
+    save_dir = Path(__file__).parent / "saved_models" / model_name
+    best_model.save(str(save_dir / "model"))
+    with open(save_dir / "results.json", "w") as f:
+        json.dump({k: v for k, v in results.items() if k != "feature_importances"}, f, indent=2)
+    if results["feature_importances"]:
+        with open(save_dir / "feature_importances.json", "w") as f:
+            json.dump(results["feature_importances"], f, indent=2)
+    print(f"  Saved to {save_dir}")
+
+    return results
 
 
 # ── Private Helpers ───────────────────────────────────────────────────────────
@@ -245,7 +258,8 @@ def _extract_best_params(best_model, param_grid_spec: Dict) -> Dict:
     for param_name in param_grid_spec.keys():
         getter = f"get{param_name[0].upper()}{param_name[1:]}"
         if hasattr(best_model, getter):
-            best_params[param_name] = getattr(best_model, getter)()
+            val = getattr(best_model, getter)
+            best_params[param_name] = val() if callable(val) else val
     return best_params
 
 
