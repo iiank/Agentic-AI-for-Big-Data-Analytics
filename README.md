@@ -85,3 +85,13 @@ spark = SparkSession.builder \
     .config("spark.sql.adaptive.enabled", "true") \
     .getOrCreate()
 ```
+
+## ## Problem Statement and Class Definition
+Traffic congestion and road safety are critical issues for urban planning and emergency response management. This project leverages a countrywide dataset of US traffic accidents, spanning 49 states and collected via real-time traffic APIs from 2016 to 2023. The primary objective is to determine whether the severity of an accident, gauged by its impact on traffic flow, can be accurately predicted using real-time environmental, temporal, and spatial conditions.
+
+The original dataset records accident severity on a scale from 1 to 4 of increasing traffic delay. To manage severe class imbalance and focus on identifying factors that lead to significant traffic disruption, the target is reclassified into a binary variable:
+
+*   Low Severity (Class 0): Original levels 1 and 2, representing accidents with minor to moderate impact on traffic flow.
+*   High Severity (Class 1): Original levels 3 and 4, representing accidents with significant impact on traffic flow.
+
+The following notebook illustrates the Exploratory Data Analysis, cleaning, and preprocessing steps executed on the dataset.
