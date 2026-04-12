@@ -240,7 +240,7 @@ def run_training(
 
     # ── 7. Save to disk immediately ───────────────────────────────────────────
     save_dir = Path(__file__).parent / "saved_models" / model_name
-    best_model.save(str(save_dir / "model"))
+    best_model.overwrite().save(str(save_dir / "model"))
     with open(save_dir / "results.json", "w") as f:
         json.dump({k: v for k, v in results.items() if k != "feature_importances"}, f, indent=2)
     if results["feature_importances"]:

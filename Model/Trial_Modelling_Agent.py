@@ -18,7 +18,7 @@ from Modelling_Skills import MODEL_REGISTRY, run_training
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+client = OpenAI(api_key="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")
 
 SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
@@ -278,22 +278,62 @@ print("Modelling agent graph compiled.")
 # Load your engineered parquet and pass it in as df below.
 
 from pyspark.sql import SparkSession
+from pathlib import Path
+import psutil
+import sys
+
+cores = os.cpu_count()
+
+total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+driver_memory_gb = int(total_ram_gb * 0.7)
+driver_memory = f"{driver_memory_gb}g"
+
+print(f"Cores: {cores}")
+print(f"Driver Memory: {driver_memory}")
+
+PYTHON_PATH = sys.executable
+
+os.environ['PYSPARK_PYTHON']        = PYTHON_PATH
+os.environ['PYSPARK_DRIVER_PYTHON'] = PYTHON_PATH
+os.environ['SPARK_LOCAL_IP']        = '127.0.0.1'
+os.environ['PYSPARK_PIN_THREAD']    = 'true'
+
+print("Python path:", PYTHON_PATH)
+print("Python version:", sys.version)
+
+if "spark" in locals():
+    spark.stop()
+    print("Existing Spark session stopped.")
 
 spark = SparkSession.builder \
-    .appName("BT4221_Modelling") \
     .master("local[*]") \
-    .config("spark.driver.memory", "12g") \
-    .config("spark.driver.maxResultSize", "4g") \
-    .config("spark.sql.shuffle.partitions", "48") \
-    .config("spark.default.parallelism", "16") \
-    .config("spark.sql.adaptive.enabled", "true") \
-    .config("spark.memory.fraction", "0.8") \
-    .config("spark.memory.storageFraction", "0.3") \
+    .appName("SparkTest") \
+    .config("spark.driver.host",                       "127.0.0.1") \
+    .config("spark.driver.bindAddress",                "127.0.0.1") \
+    .config("spark.driver.memory",                     driver_memory) \
+    .config("spark.sql.shuffle.partitions",            cores * 3) \
+    .config("spark.default.parallelism",               cores) \
+    .config("spark.sql.adaptive.enabled",              "true") \
+    .config("spark.pyspark.python",                    PYTHON_PATH) \
+    .config("spark.pyspark.driver.python",             PYTHON_PATH) \
+    .config("spark.python.use.daemon",                 "false") \
+    .config("spark.python.worker.faulthandler.enabled","true") \
+    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true") \
+    .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("ERROR")
 
-engineered_df = spark.read.parquet("../engineered_df.parquet")
+PROJECT_ROOT = Path.cwd()
+ENGINEERED_PARQUET_PATH = PROJECT_ROOT / "dataset/engineered_df.parquet"
+
+if not ENGINEERED_PARQUET_PATH.exists():
+    raise FileNotFoundError(f"Engineered Parquet not found at: {ENGINEERED_PARQUET_PATH}")
+
+print("Project root:", PROJECT_ROOT)
+print("Original Parquet:", ENGINEERED_PARQUET_PATH)
+
+engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH))
 print(f"Loaded: {engineered_df.count():,} rows")
 
 initial_state: AgentState = {
