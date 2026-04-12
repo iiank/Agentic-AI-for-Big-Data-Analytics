@@ -277,106 +277,105 @@ print("Modelling agent graph compiled.")
 # ── Run ───────────────────────────────────────────────────────────────────────
 # Load your engineered parquet and pass it in as df below.
 
-from pyspark.sql import SparkSession
+if __name__ == "__main__":
+    from pyspark.sql import SparkSession
 
-spark = SparkSession.builder \
-    .appName("BT4221_Modelling") \
-    .master("local[*]") \
-    .config("spark.driver.memory", "12g") \
-    .config("spark.driver.maxResultSize", "4g") \
-    .config("spark.sql.shuffle.partitions", "48") \
-    .config("spark.default.parallelism", "16") \
-    .config("spark.sql.adaptive.enabled", "true") \
-    .config("spark.memory.fraction", "0.8") \
-    .config("spark.memory.storageFraction", "0.3") \
-    .getOrCreate()
+    spark = SparkSession.builder \
+        .appName("BT4221_Modelling") \
+        .master("local[*]") \
+        .config("spark.driver.memory", "12g") \
+        .config("spark.driver.maxResultSize", "4g") \
+        .config("spark.sql.shuffle.partitions", "48") \
+        .config("spark.default.parallelism", "16") \
+        .config("spark.sql.adaptive.enabled", "true") \
+        .config("spark.memory.fraction", "0.8") \
+        .config("spark.memory.storageFraction", "0.3") \
+        .getOrCreate()
 
-spark.sparkContext.setLogLevel("ERROR")
+    spark.sparkContext.setLogLevel("ERROR")
 
-engineered_df = spark.read.parquet("../engineered_df.parquet")
-print(f"Loaded: {engineered_df.count():,} rows")
+    engineered_df = spark.read.parquet("../engineered_df.parquet")
+    print(f"Loaded: {engineered_df.count():,} rows")
 
-initial_state: AgentState = {
-    "iteration":    0,
-    "feature_cols": [                       # <-- from FE final_state
-        "is_rush_hour", "Weather_Condition_idx", "Wind_Direction_ohe",
-        "State_ohe", "Sunrise_Sunset_ohe", "Start_Time_Hour",
-        "Start_Time_is_Weekend", "Visibility(mi)_bin", "Temperature(F)_bin",
-        "Wind_Speed(mph)_bin", "Distance(mi)", "Duration_Minutes",
-        "Distance(mi)_ratio_Duration_Minutes",
-    ],
-    "post_cleaning_profile": {              # <-- from FE final_state
-        "num_rows": 5270673,
-        "class_distribution": {
-            0: {"count": 4531863, "pct": 85.98},
-            1: {"count": 738810,  "pct": 14.02},
+    initial_state: AgentState = {
+        "iteration":    0,
+        "feature_cols": [                       # <-- from FE final_state
+            "is_rush_hour", "Weather_Condition_idx", "Wind_Direction_ohe",
+            "State_ohe", "Sunrise_Sunset_ohe", "Start_Time_Hour",
+            "Start_Time_is_Weekend", "Visibility(mi)_bin", "Temperature(F)_bin",
+            "Wind_Speed(mph)_bin", "Distance(mi)", "Duration_Minutes",
+            "Distance(mi)_ratio_Duration_Minutes",
+        ],
+        "post_cleaning_profile": {              # <-- from FE final_state
+            "num_rows": 5270673,
+            "class_distribution": {
+                0: {"count": 4531863, "pct": 85.98},
+                1: {"count": 738810,  "pct": 14.02},
+            },
+            "class_weight_ratio": 6.13,
         },
-        "class_weight_ratio": 6.13,
-    },
 
-    "model_selection":     {},
-    "primary_results":     {},
-    "secondary_results":   {},
-    "evaluation_decision": {},
-    "modelling_log":       [],
-}
+        "model_selection":     {},
+        "primary_results":     {},
+        "secondary_results":   {},
+        "evaluation_decision": {},
+        "modelling_log":       [],
+    }
 
-print("\nStarting Modelling Agent...\n")
-config = {"configurable": {"thread_id": "modelling_run_3"}}
+    print("\nStarting Modelling Agent...\n")
+    config = {"configurable": {"thread_id": "modelling_run_4"}}
 
-modelling_agent.invoke(initial_state, config=config)
+    modelling_agent.invoke(initial_state, config=config)
 
-# Handle human_review interrupt
-while modelling_agent.get_state(config).next:
-    snapshot      = modelling_agent.get_state(config)
-    interrupt_val = snapshot.tasks[0].interrupts[0].value
+    # Handle human_review interrupt
+    while modelling_agent.get_state(config).next:
+        snapshot      = modelling_agent.get_state(config)
+        interrupt_val = snapshot.tasks[0].interrupts[0].value
 
+        print("\n" + "=" * 60)
+        print("HUMAN REVIEW -- Model Selection")
+        print("=" * 60)
+        print(f"  Primary   : {interrupt_val['primary_model']}")
+        print(f"  Grid      : {json.dumps(interrupt_val.get('primary_param_grid'), indent=4)}")
+        print(f"  Secondary : {interrupt_val['secondary_model']}")
+        print(f"  Grid      : {json.dumps(interrupt_val.get('secondary_param_grid'), indent=4)}")
+        print(f"  Why       : {interrupt_val['justification']}")
+        print(f"  Grid note : {interrupt_val.get('param_grid_rationale')}")
+        print("\n  Excluded models:")
+        for model, reason in interrupt_val.get("excluded_models", {}).items():
+            print(f"    {model}: {reason}")
+        print("=" * 60)
+
+        approval = input("\nApprove? (y to proceed, n to override): ").strip().lower()
+
+        if approval == "y":
+            resume = {"approved": True}
+        else:
+            op = input("Override primary model (or press Enter to keep): ").strip()
+            os_ = input("Override secondary model (or press Enter to keep): ").strip()
+            resume = {"approved": False, "override_primary": op, "override_secondary": os_}
+
+        modelling_agent.invoke(Command(resume=resume), config=config)
+
+    final_state = modelling_agent.get_state(config).values
+
+    # ── Print Results ─────────────────────────────────────────────────────────
     print("\n" + "=" * 60)
-    print("HUMAN REVIEW -- Model Selection")
-    print("=" * 60)
-    print(f"  Primary   : {interrupt_val['primary_model']}")
-    print(f"  Grid      : {json.dumps(interrupt_val.get('primary_param_grid'), indent=4)}")
-    print(f"  Secondary : {interrupt_val['secondary_model']}")
-    print(f"  Grid      : {json.dumps(interrupt_val.get('secondary_param_grid'), indent=4)}")
-    print(f"  Why       : {interrupt_val['justification']}")
-    print(f"  Grid note : {interrupt_val.get('param_grid_rationale')}")
-    print("\n  Excluded models:")
-    for model, reason in interrupt_val.get("excluded_models", {}).items():
-        print(f"    {model}: {reason}")
+    print("MODELLING AGENT COMPLETE")
     print("=" * 60)
 
-    approval = input("\nApprove? (y to proceed, n to override): ").strip().lower()
+    ev = final_state["evaluation_decision"]
+    print(f"Winner    : {ev.get('winner')} (AUC {ev.get('winner_auc')})")
+    print(f"Runner-up : {ev.get('runner_up')} (AUC {ev.get('runner_up_auc')})")
+    print(f"\nNarrative (for report):\n{ev.get('narrative')}")
 
-    if approval == "y":
-        resume = {"approved": True}
-    else:
-        op = input("Override primary model (or press Enter to keep): ").strip()
-        os_ = input("Override secondary model (or press Enter to keep): ").strip()
-        resume = {"approved": False, "override_primary": op, "override_secondary": os_}
+    print("\nFull audit log:")
+    for entry in final_state["modelling_log"]:
+        print(f"  {entry}")
 
-    modelling_agent.invoke(Command(resume=resume), config=config)
-
-final_state = modelling_agent.get_state(config).values
-
-
-# ── Print Results ─────────────────────────────────────────────────────────────
-
-print("\n" + "=" * 60)
-print("MODELLING AGENT COMPLETE")
-print("=" * 60)
-
-ev = final_state["evaluation_decision"]
-print(f"Winner    : {ev.get('winner')} (AUC {ev.get('winner_auc')})")
-print(f"Runner-up : {ev.get('runner_up')} (AUC {ev.get('runner_up_auc')})")
-print(f"\nNarrative (for report):\n{ev.get('narrative')}")
-
-print("\nFull audit log:")
-for entry in final_state["modelling_log"]:
-    print(f"  {entry}")
-
-for role in ("primary", "secondary"):
-    results = final_state[f"{role}_results"]
-    if results.get("feature_importances"):
-        print(f"\nTop-10 feature importances ({results['model_name']}):")
-        for feat, imp in list(results["feature_importances"].items())[:10]:
-            print(f"  {feat:<45} {imp:.4f}")
+    for role in ("primary", "secondary"):
+        results = final_state[f"{role}_results"]
+        if results.get("feature_importances"):
+            print(f"\nTop-10 feature importances ({results['model_name']}):")
+            for feat, imp in list(results["feature_importances"].items())[:10]:
+                print(f"  {feat:<45} {imp:.4f}")
