@@ -18,7 +18,7 @@ git config --global user.name "github username"
 ### Ensure Local Git Repository is in sync with Remote Git Repository
 ```sh
 git branch -m main          # To ensure you're in main branch
-git pull origin main        # Pull any recent commits from other developers
+git pull origin main        # Pull any recent commits from other developers 
 ```
 
 ### Pushing commits

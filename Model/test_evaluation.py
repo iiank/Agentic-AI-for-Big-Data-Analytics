@@ -58,7 +58,7 @@ def run_eval(label, state):
     return result
 
 
-# ── Tests 1–3: evaluation_node routing ─────────────────────────────────────── 
+# ── Tests 1–3: evaluation_node routing ───────────────────────────────────────  
 
 run_eval(
     "1. Both below threshold (iter 0) → expect retrain  [real saved AUCs]",

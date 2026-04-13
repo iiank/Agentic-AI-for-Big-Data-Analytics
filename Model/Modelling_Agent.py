@@ -23,7 +23,7 @@ def border(s):
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
-client = OpenAI(api_key="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")
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
@@ -34,7 +34,7 @@ class AgentState(TypedDict):
     # Input — pass in from FE phase
     feature_cols:          List[str]
     post_cleaning_profile: Dict[str, Any]
-    iteration:             int              # retry counter
+    iteration:             int              # retry counter 
 
     # Agent outputs
     model_selection:       Dict[str, Any]   # LLM Call 1: primary + secondary + grids
