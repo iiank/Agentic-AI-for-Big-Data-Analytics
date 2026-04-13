@@ -71,7 +71,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
         "tunable": {
-            "maxIter":  [20, 50],
+            "maxIter":  [50, 100],
             "maxDepth": [5, 10],
             "stepSize": [0.05, 0.1],
         }
