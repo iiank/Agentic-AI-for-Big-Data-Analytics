@@ -31,11 +31,11 @@ Select a PRIMARY and SECONDARY model to compare. Choose the pair that best balan
 - **Performance** — expected predictive power on tabular, mixed-feature data; if dataset complexity is high (high num of features), the model chosen should be sufficiently complex
 - **Interpretability** — how explainable the model is (LogisticRegression > RandomForestClassifier > GBTClassifier)
 - **Diversity** — the pair should differ enough in architecture that the comparison is informative; avoid two models of the same family
-- **Speed** — training time matters but is not the primary constraint; all models are viable on ~350K rows post-resampling
+- **Speed** — training time matters but is not the primary constraint; all models are viable on ~2.25M rows post-balancing
 
 
 Guidelines:
-- **Class imbalance is handled upstream** via SMOTETomek resampling — you do not need to account for it in model selection.
+- **Class imbalance is handled upstream** via majority class downsampling to match minority (50:50 split) - you do not need to account for it in model selection.
 - **Feature types:** Mixed numeric and OHE-encoded features — tree-based models handle these naturally.
 
 **If `previous_attempt` is present in the payload**, this is a retry after a failed evaluation. You MUST:
@@ -52,7 +52,7 @@ Propose a param grid for each model. Training uses 3-fold CrossValidator. Keep e
 Valid tunable parameters per model:
 - `LogisticRegression`: `regParam` (float), `elasticNetParam` (float 0.0–1.0), `maxIter` (int)
 - `RandomForestClassifier`: `numTrees` (int), `maxDepth` (int), `minInstancesPerNode` (int)
-- `GBTClassifier`: `maxIter` (int), `maxDepth` (int), `stepSize` (float)
+- `GBTClassifier`: `maxIter` (int), `maxDepth` (int), `stepSize` (float), `subsamplingRate` (float 0.0–1.0), `minInstancesPerNode` (int)
 - `LinearSVC`: `regParam` (float), `maxIter` (int)
 
 Also state a `param_grid_rationale` explaining your grid design choices.

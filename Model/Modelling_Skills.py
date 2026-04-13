@@ -69,11 +69,13 @@ MODEL_REGISTRY: Dict[str, Dict] = {
     "GBTClassifier": {
         "class":   GBTClassifier,
         "task":    "classification",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt"},
         "tunable": {
-            "maxIter":  [50, 100],
-            "maxDepth": [5, 10],
-            "stepSize": [0.05, 0.1],
+            "maxIter":             [50, 100],
+            "maxDepth":            [5, 7, 10],
+            "stepSize":            [0.05, 0.1],
+            "subsamplingRate":     [0.7, 0.8],
+            "minInstancesPerNode": [5, 10],
         }
     },
  
@@ -132,7 +134,6 @@ def run_training(
     model_name: str,
     param_grid_spec: Dict[str, List],
     feature_cols: List[str],
-    class_counts: Dict[int, int],
     seed: int = 42,
 ) -> Dict[str, Any]:
     """
@@ -179,43 +180,20 @@ def run_training(
     train_df, test_df = df_assembled.randomSplit([0.8, 0.2], seed=seed)
     print(f"  Train: {train_df.count():,} rows | Test: {test_df.count():,} rows")
 
-    # ── 4. Downsample + SMOTETomek ─────────────────────────────────────────────
-    # print("  Downsampling majority class before resampling...")
-    # fractions     = {0: 0.05, 1: 0.20}
-    # sampled_train = train_df.stat.sampleBy(LABEL_COL, fractions, seed=seed)
-
-    # print("  Converting to pandas for SMOTETomek...")
-    # pdf        = sampled_train.toPandas()
-    # X          = np.stack(pdf[FEATURES_COL].apply(lambda v: v.toArray()))
-    # y          = pdf[LABEL_COL].values
-
-    # print("  Applying SMOTETomek (may take a moment)...")
-    # smt          = SMOTETomek(smote=SMOTE(random_state=seed), tomek=TomekLinks())
-    # X_res, y_res = smt.fit_resample(X, y)
-
-    # print("  Converting balanced data back to Spark...")
-    # spark          = df.sparkSession
-    # rdd            = spark.sparkContext.parallelize(zip(X_res, y_res)).map(
-    #                    lambda x: (Vectors.dense(x[0]), int(x[1]))
-    #                  )
-    # schema         = StructType([
-    #                    StructField(FEATURES_COL, VectorUDT(),   True),
-    #                    StructField(LABEL_COL,    IntegerType(), True),
-    #                  ])
-    # balanced_train = spark.createDataFrame(rdd, schema)
-
+    # ── 4. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
-    minority_n   = int(min(class_counts.values()))
-    majority_n   = int(max(class_counts.values()))
-    majority_lbl = max(class_counts, key=class_counts.get)
-    minority_lbl = min(class_counts, key=class_counts.get)
+    train_class_counts = train_df.groupBy(LABEL_COL).count().collect()
+    train_counts = {int(row[LABEL_COL]): row["count"] for row in train_class_counts}
+    minority_n   = int(min(train_counts.values()))
+    majority_n   = int(max(train_counts.values()))
+    majority_lbl = max(train_counts, key=train_counts.get)
+    minority_lbl = min(train_counts, key=train_counts.get)
     fractions    = {
         majority_lbl: minority_n / majority_n,
         minority_lbl: 1.0,
     }
-    print(f"  Class counts — majority: ~{majority_n:,} | minority: ~{minority_n:,}")
-    print(f"  Downsampling majority to ~{minority_n:,} — balanced train: ~{minority_n * 2:,} rows")
- 
+    print(f"  Train class counts - majority: ~{majority_n:,} | minority: ~{minority_n:,}")
+    print(f"  Downsampling majority to ~{minority_n:,} - balanced train: ~{minority_n * 2:,} rows")
     balanced_train = train_df.stat.sampleBy(LABEL_COL, fractions, seed=seed)
 
     # ── 5. Build model + CrossValidator ───────────────────────────────────────

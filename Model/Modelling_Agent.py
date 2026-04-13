@@ -201,11 +201,7 @@ def training_node(state: AgentState) -> AgentState:
             df=engineered_df,
             model_name=model_name,
             param_grid_spec=param_grid,
-            feature_cols=state["feature_cols"],
-            class_counts={
-                int(k): v["count"]
-                for k, v in state["post_cleaning_profile"]["class_distribution"].items()
-            },
+            feature_cols=state["feature_cols"]
         )
         state[f"{role}_results"] = results
 
@@ -312,6 +308,7 @@ os.environ['PYSPARK_PIN_THREAD']    = 'true'
 border("Python installation check")
 print("Python path:", PYTHON_PATH)
 print("Python version:", sys.version)
+border("Extra Logging")
 
 if "spark" in locals():
     spark.stop()
