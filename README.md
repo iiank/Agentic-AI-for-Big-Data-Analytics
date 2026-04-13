@@ -36,6 +36,10 @@ git push origin main                                   # Push to remote git repo
         <td>Link</td>
     </tr>
     <tr>
+        <td>Python</td>
+        <td>3.11.* (3.13.9 & 3.14.3 seems to have compatibility issues)</td>
+    </tr>
+    <tr>
         <td>Java</td>
         <td><a href="https://jdk.java.net//java-se-ri/17-MR1">jdk17.0.0.1</a></td>
     </tr>
