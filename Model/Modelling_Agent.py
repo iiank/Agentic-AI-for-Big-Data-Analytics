@@ -15,6 +15,11 @@ from langgraph.types import Command, interrupt
 
 from Modelling_Skills import MODEL_REGISTRY, run_training
 
+# Visual helper function (Only for printing purposes)
+def border(s):
+    print()
+    print(f"{'='*20} {s} {'='*20}")
+
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
@@ -293,6 +298,7 @@ total_ram_gb = psutil.virtual_memory().total / (1024 ** 3)
 driver_memory_gb = int(total_ram_gb * 0.7)
 driver_memory = f"{driver_memory_gb}g"
 
+border("Retrieve local computer specifications")
 print(f"Cores: {cores}")
 print(f"Driver Memory: {driver_memory}")
 
@@ -303,6 +309,7 @@ os.environ['PYSPARK_DRIVER_PYTHON'] = PYTHON_PATH
 os.environ['SPARK_LOCAL_IP']        = '127.0.0.1'
 os.environ['PYSPARK_PIN_THREAD']    = 'true'
 
+border("Python installation check")
 print("Python path:", PYTHON_PATH)
 print("Python version:", sys.version)
 
@@ -335,10 +342,13 @@ ENGINEERED_PARQUET_PATH = PROJECT_ROOT / "dataset/engineered_df.parquet"
 if not ENGINEERED_PARQUET_PATH.exists():
     raise FileNotFoundError(f"Engineered Parquet not found at: {ENGINEERED_PARQUET_PATH}")
 
+border("Identify directories")
 print("Project root:", PROJECT_ROOT)
 print("Original Parquet:", ENGINEERED_PARQUET_PATH)
 
 engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH))
+
+border("Loading FE parquet")
 print(f"Loaded: {engineered_df.count():,} rows")
 
 initial_state: AgentState = {
