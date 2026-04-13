@@ -78,19 +78,7 @@ Variable value: path/to/hadoop/3.3.6 (Example: C:\hadoop\hadoop-3.3.6)
 
 Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 
-## SparkSession
-```sh
-spark = SparkSession.builder \
-    .master("local[*]") \
-    .appName("US_Accidents") \
-    .config("spark.driver.memory", "") \                // Set the amount of RAM based on availability
-    .config("spark.default.parallelism", "") \          // Set based on the number of Logical Processors (Cores * 2)
-    .config("spark.sql.shuffle.partitions", "") \       // Whatever you set for spark.default.parallelism * 3
-    .config("spark.sql.adaptive.enabled", "true") \
-    .getOrCreate()
-```
-
-## ## Problem Statement and Class Definition
+## Problem Statement and Class Definition
 Traffic congestion and road safety are critical issues for urban planning and emergency response management. This project leverages a countrywide dataset of US traffic accidents, spanning 49 states and collected via real-time traffic APIs from 2016 to 2023. The primary objective is to determine whether the severity of an accident, gauged by its impact on traffic flow, can be accurately predicted using real-time environmental, temporal, and spatial conditions.
 
 The original dataset records accident severity on a scale from 1 to 4 of increasing traffic delay. To manage severe class imbalance and focus on identifying factors that lead to significant traffic disruption, the target is reclassified into a binary variable:
