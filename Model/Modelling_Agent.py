@@ -4,9 +4,10 @@
 # Imports PySpark execution from Modelling_Skills.py.
 
 import json
+import operator
 import os
 from pathlib import Path
-from typing import Any, Dict, List, TypedDict
+from typing import Annotated, Any, Dict, List, TypedDict
 
 from openai import OpenAI
 from langgraph.graph import StateGraph, END
@@ -41,7 +42,7 @@ class AgentState(TypedDict):
     primary_results:       Dict[str, Any]   # training results for primary model
     secondary_results:     Dict[str, Any]   # training results for secondary model
     evaluation_decision:   Dict[str, Any]   # LLM Call 2: winner + narrative + next_action
-    modelling_log:         List[str]
+    modelling_log:         Annotated[List[str], operator.add]
 
 
 # ── LLM Call ──────────────────────────────────────────────────────────────────
@@ -118,28 +119,29 @@ def build_evaluation_context(state: AgentState) -> Dict:
 
 # ── LangGraph Nodes ───────────────────────────────────────────────────────────
 
-def model_selection_node(state: AgentState) -> AgentState:
+def model_selection_node(state: AgentState) -> dict:
     print("\n[Modelling Agent] Node: model_selection")
 
     context  = build_model_selection_context(state)
     decision = call_llm(context)
-    state["model_selection"] = decision
-
-    state["modelling_log"] = state.get("modelling_log", []) + [
-        f"[model_selection] "
-        f"primary={decision['primary_model']} | "
-        f"secondary={decision['secondary_model']} | "
-        f"excluded={list(decision.get('excluded_models', {}).keys())}"
-    ]
 
     print(f"  Primary   : {decision['primary_model']}")
     print(f"  Secondary : {decision['secondary_model']}")
     print(f"  Why       : {decision['justification']}")
     print(f"  Excluded  : {list(decision.get('excluded_models', {}).keys())}")
-    return state
+
+    return {
+        "model_selection": decision,
+        "modelling_log": [
+            f"[model_selection] "
+            f"primary={decision['primary_model']} | "
+            f"secondary={decision['secondary_model']} | "
+            f"excluded={list(decision.get('excluded_models', {}).keys())}"
+        ],
+    }
 
 
-def human_review_node(state: AgentState) -> AgentState:
+def human_review_node(state: AgentState) -> dict:
     """
     Human-in-the-loop gate before expensive training.
     Pauses with interrupt() until caller resumes with Command(resume={...}).
@@ -148,7 +150,7 @@ def human_review_node(state: AgentState) -> AgentState:
       {"approved": True}
       {"approved": False, "override_primary": "ModelName", "override_secondary": "ModelName"}
     """
-    decision = state["model_selection"]
+    decision = dict(state["model_selection"])  # copy — do not mutate state directly
 
     human_input = interrupt({
         "primary_model":        decision["primary_model"],
@@ -166,30 +168,34 @@ def human_review_node(state: AgentState) -> AgentState:
 
     if not approved:
         if override_primary and override_primary in MODEL_REGISTRY:
-            state["model_selection"]["primary_model"]    = override_primary
-            state["model_selection"]["primary_param_grid"] = MODEL_REGISTRY[override_primary]["tunable"]
+            decision["primary_model"]     = override_primary
+            decision["primary_param_grid"] = MODEL_REGISTRY[override_primary]["tunable"]
             print(f"  Primary overridden to {override_primary} — using registry default grid")
         elif override_primary:
             print(f"  '{override_primary}' not in registry. Keeping agent's primary selection.")
 
         if override_secondary and override_secondary in MODEL_REGISTRY:
-            state["model_selection"]["secondary_model"]    = override_secondary
-            state["model_selection"]["secondary_param_grid"] = MODEL_REGISTRY[override_secondary]["tunable"]
+            decision["secondary_model"]     = override_secondary
+            decision["secondary_param_grid"] = MODEL_REGISTRY[override_secondary]["tunable"]
             print(f"  Secondary overridden to {override_secondary} — using registry default grid")
         elif override_secondary:
             print(f"  '{override_secondary}' not in registry. Keeping agent's secondary selection.")
 
-    state["modelling_log"] = state["modelling_log"] + [
-        f"[human_review] approved={approved} | "
-        f"primary={state['model_selection']['primary_model']} | "
-        f"secondary={state['model_selection']['secondary_model']}"
-    ]
-    return state
+    return {
+        "model_selection": decision,
+        "modelling_log": [
+            f"[human_review] approved={approved} | "
+            f"primary={decision['primary_model']} | "
+            f"secondary={decision['secondary_model']}"
+        ],
+    }
 
 
-def training_node(state: AgentState) -> AgentState:
+def training_node(state: AgentState) -> dict:
     """Trains both models sequentially using run_training() from Modelling_Skills.py."""
-    decision = state["model_selection"]
+    decision    = state["model_selection"]
+    updates     = {}
+    log_entries = []
 
     for role in ("primary", "secondary"):
         model_name = decision[f"{role}_model"]
@@ -203,37 +209,26 @@ def training_node(state: AgentState) -> AgentState:
             param_grid_spec=param_grid,
             feature_cols=state["feature_cols"]
         )
-        state[f"{role}_results"] = results
-
-        state["modelling_log"] = state["modelling_log"] + [
+        updates[f"{role}_results"] = results
+        log_entries.append(
             f"[training_{role}] model={model_name} | "
             f"auc={results['auc']} | "
             f"best_params={results['best_params']}"
-        ]
+        )
 
         if results.get("feature_importances"):
             top5 = list(results["feature_importances"].items())[:5]
             print(f"  Top-5 feats : {top5}")
 
-    return state
+    return {**updates, "modelling_log": log_entries}
 
 
-def evaluation_node(state: AgentState) -> AgentState:
+def evaluation_node(state: AgentState) -> dict:
     """LLM Call 2. Compares both AUC results, picks winner, generates narrative."""
     print("\n[Modelling Agent] Node: evaluation")
 
     context  = build_evaluation_context(state)
     decision = call_llm(context)
-    state["evaluation_decision"] = decision
-    state["iteration"] = state.get("iteration", 0) + 1
-
-    state["modelling_log"] = state["modelling_log"] + [
-        f"[evaluation] winner={decision['winner']} | "
-        f"winner_auc={decision['winner_auc']} | "
-        f"runner_up={decision['runner_up']} | "
-        f"runner_up_auc={decision['runner_up_auc']} | "
-        f"next_action={decision.get('next_action')}"
-    ]
 
     print(f"  Winner      : {decision['winner']} (AUC {decision['winner_auc']})")
     print(f"  Runner-up   : {decision['runner_up']} (AUC {decision['runner_up_auc']})")
@@ -241,7 +236,18 @@ def evaluation_node(state: AgentState) -> AgentState:
     if decision.get("next_action") == "retrain":
         print(f"  Guidance    : {decision.get('retrain_guidance')}")
     print(f"  Narrative   : {decision['narrative']}")
-    return state
+
+    return {
+        "evaluation_decision": decision,
+        "iteration": state.get("iteration", 0) + 1,
+        "modelling_log": [
+            f"[evaluation] winner={decision['winner']} | "
+            f"winner_auc={decision['winner_auc']} | "
+            f"runner_up={decision['runner_up']} | "
+            f"runner_up_auc={decision['runner_up_auc']} | "
+            f"next_action={decision.get('next_action')}"
+        ],
+    }
 
 
 # ── Routing ──────────────────────────────────────────────────────────────────
@@ -348,29 +354,47 @@ engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH))
 border("Loading FE parquet")
 print(f"Loaded: {engineered_df.count():,} rows")
 
-initial_state: AgentState = {
-    "iteration":    0,
-    "feature_cols": [                       # <-- from FE final_state
-        "is_rush_hour", "Weather_Condition_idx", "Wind_Direction_ohe",
-        "State_ohe", "Sunrise_Sunset_ohe", "Start_Time_Hour",
-        "Start_Time_is_Weekend", "Visibility(mi)_bin", "Temperature(F)_bin",
-        "Wind_Speed(mph)_bin", "Distance(mi)", "Duration_Minutes",
-        "Distance(mi)_ratio_Duration_Minutes",
-    ],
-    "post_cleaning_profile": {              # <-- from FE final_state
-        "num_rows": 5270673,
-        "class_distribution": {
-            0: {"count": 4531863, "pct": 85.98},
-            1: {"count": 738810,  "pct": 14.02},
-        },
-        "class_weight_ratio": 6.13,
-    },
+# ── Load FE agent state ───────────────────────────────────────────────────────
 
-    "model_selection":     {},
-    "primary_results":     {},
-    "secondary_results":   {},
-    "evaluation_decision": {},
-    "modelling_log":       [],
+FE_STATE_PATH = PROJECT_ROOT.parent / "FE" / "fe_agent_state.json"
+if not FE_STATE_PATH.exists():
+    raise FileNotFoundError(f"FE agent state not found at: {FE_STATE_PATH}")
+
+with open(FE_STATE_PATH) as f:
+    fe_state = json.load(f)
+
+# Exclude high_severity — it is derived from the target and causes leakage
+feature_cols = [c for c in fe_state["feature_columns"] if c != "high_severity"]
+
+# Derive binary class distribution from FE stats report
+stats      = fe_state["feature_stats_report"]
+num_rows   = stats["structural_overview"]["total_rows"]
+high_ratio = stats["boolean_and_binary_analysis"]["high_severity"]["true_ratio"]
+high_count = round(num_rows * high_ratio)
+low_count  = num_rows - high_count
+post_cleaning_profile = {
+    "num_rows": num_rows,
+    "class_distribution": {
+        0: {"count": low_count,  "pct": round((1 - high_ratio) * 100, 2)},
+        1: {"count": high_count, "pct": round(high_ratio * 100, 2)},
+    },
+    "class_weight_ratio": round(low_count / high_count, 2),
+}
+
+border("FE state loaded")
+print(f"Feature cols   : {len(feature_cols)} (excluded high_severity)")
+print(f"Num rows       : {num_rows:,}")
+print(f"Class ratio    : {post_cleaning_profile['class_weight_ratio']} : 1")
+
+initial_state: AgentState = {
+    "iteration":             0,
+    "feature_cols":          feature_cols,
+    "post_cleaning_profile": post_cleaning_profile,
+    "model_selection":       {},
+    "primary_results":       {},
+    "secondary_results":     {},
+    "evaluation_decision":   {},
+    "modelling_log":         [],
 }
 
 print("\nStarting Modelling Agent...\n")
