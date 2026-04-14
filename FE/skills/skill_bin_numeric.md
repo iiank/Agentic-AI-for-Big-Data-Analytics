@@ -42,8 +42,7 @@ Apply this skill to continuous numeric columns where domain knowledge dictates m
 ## Output
 
 DataFrame with new {column}_bin integer column added.
-Original column is retained, agent decides whether to keep or drop it
-by including/excluding both in assembler_cols.
+Add the new column to assembler_cols.
 
 ## Constraints
 
