@@ -1,28 +1,27 @@
 {
     "feature_columns": [
         "is_rush_hour",
-        "is_fair",
-        "is_cloudy",
-        "is_clear",
+        "is_highway",
+        "is_county_road",
+        "is_state_road",
+        "is_local_street",
+        "is_us_route",
+        "is_expressway",
+        "is_national_highway",
         "is_rain",
         "is_snow",
         "is_fog",
+        "is_clear",
+        "is_overcast",
+        "is_windy",
+        "is_extreme_weather",
         "is_severe",
-        "is_winter",
-        "is_mixed_precip",
-        "is_visibility_reduced",
-        "is_highway",
-        "is_county_road",
-        "is_local_street",
-        "is_residential",
-        "is_bus_route",
-        "is_north_south",
-        "is_east_west",
-        "is_major_road",
-        "Temperature(F)_multiply_Precipitation(in)",
+        "is_low_visibility",
         "Wind_Speed(mph)_multiply_Precipitation(in)",
-        "Humidity(%)_multiply_Temperature(F)",
-        "Wind_Speed(mph)_multiply_Visibility(mi)",
+        "Temperature(F)_multiply_Humidity(%)",
+        "Distance(mi)_ratio_Duration_Seconds",
+        "Visibility(mi)_multiply_Precipitation(in)",
+        "Temperature(F)_multiply_Precipitation(in)",
         "Visibility(mi)_bin",
         "Temperature(F)_bin",
         "State_idx",
@@ -40,10 +39,9 @@
         "Start_Time_Month",
         "Start_Lat",
         "Start_Lng",
-        "Temperature(F)",
+        "Distance(mi)",
         "Humidity(%)",
         "Pressure(in)",
-        "Visibility(mi)",
         "Wind_Speed(mph)",
         "Precipitation(in)",
         "Start_Time_Year",
@@ -54,8 +52,8 @@
     ],
     "feature_stats_report": {
         "structural_overview": {
-            "total_rows": 6855397,
-            "total_columns": 50,
+            "total_rows": 7183644,
+            "total_columns": 60,
             "column_types": {
                 "Start_Time_Month": "IntegerType()",
                 "Severity": "IntegerType()",
@@ -76,28 +74,27 @@
                 "Start_Time_is_Weekend": "IntegerType()",
                 "high_severity": "IntegerType()",
                 "is_rush_hour": "IntegerType()",
-                "is_fair": "IntegerType()",
-                "is_cloudy": "IntegerType()",
-                "is_clear": "IntegerType()",
+                "is_highway": "IntegerType()",
+                "is_county_road": "IntegerType()",
+                "is_state_road": "IntegerType()",
+                "is_local_street": "IntegerType()",
+                "is_us_route": "IntegerType()",
+                "is_expressway": "IntegerType()",
+                "is_national_highway": "IntegerType()",
                 "is_rain": "IntegerType()",
                 "is_snow": "IntegerType()",
                 "is_fog": "IntegerType()",
+                "is_clear": "IntegerType()",
+                "is_overcast": "IntegerType()",
+                "is_windy": "IntegerType()",
+                "is_extreme_weather": "IntegerType()",
                 "is_severe": "IntegerType()",
-                "is_winter": "IntegerType()",
-                "is_mixed_precip": "IntegerType()",
-                "is_visibility_reduced": "IntegerType()",
-                "is_highway": "IntegerType()",
-                "is_county_road": "IntegerType()",
-                "is_local_street": "IntegerType()",
-                "is_residential": "IntegerType()",
-                "is_bus_route": "IntegerType()",
-                "is_north_south": "IntegerType()",
-                "is_east_west": "IntegerType()",
-                "is_major_road": "IntegerType()",
-                "Temperature(F)_multiply_Precipitation(in)": "DoubleType()",
+                "is_low_visibility": "IntegerType()",
                 "Wind_Speed(mph)_multiply_Precipitation(in)": "DoubleType()",
-                "Humidity(%)_multiply_Temperature(F)": "DoubleType()",
-                "Wind_Speed(mph)_multiply_Visibility(mi)": "DoubleType()",
+                "Temperature(F)_multiply_Humidity(%)": "DoubleType()",
+                "Distance(mi)_ratio_Duration_Seconds": "DoubleType()",
+                "Visibility(mi)_multiply_Precipitation(in)": "DoubleType()",
+                "Temperature(F)_multiply_Precipitation(in)": "DoubleType()",
                 "Visibility(mi)_bin": "DoubleType()",
                 "Temperature(F)_bin": "DoubleType()",
                 "State_idx": "DoubleType()",
@@ -210,37 +207,45 @@
                 "skewness": -0.1083,
                 "contains_negatives": false
             },
-            "Temperature(F)_multiply_Precipitation(in)": {
-                "min": -4.41,
-                "max": 2334.08,
-                "mean": 0.3774,
-                "stddev": 5.6539,
-                "skewness": 101.5785,
-                "contains_negatives": true
-            },
             "Wind_Speed(mph)_multiply_Precipitation(in)": {
                 "min": 0.0,
                 "max": 408.0,
-                "mean": 0.0563,
-                "stddev": 0.9031,
-                "skewness": 128.4918,
+                "mean": 0.056,
+                "stddev": 0.8888,
+                "skewness": 128.8881,
                 "contains_negatives": false
             },
-            "Humidity(%)_multiply_Temperature(F)": {
+            "Temperature(F)_multiply_Humidity(%)": {
                 "min": -3916.0,
                 "max": 15513.6,
-                "mean": 3872.3946,
-                "stddev": 1630.7656,
-                "skewness": 0.0267,
+                "mean": 3866.9225,
+                "stddev": 1629.3419,
+                "skewness": 0.0264,
                 "contains_negatives": true
             },
-            "Wind_Speed(mph)_multiply_Visibility(mi)": {
+            "Distance(mi)_ratio_Duration_Seconds": {
                 "min": 0.0,
-                "max": 10870.0,
-                "mean": 69.4647,
-                "stddev": 53.6163,
-                "skewness": 5.8546,
+                "max": 0.0242,
+                "mean": 0.0001,
+                "stddev": 0.0004,
+                "skewness": 10.8678,
                 "contains_negatives": false
+            },
+            "Visibility(mi)_multiply_Precipitation(in)": {
+                "min": 0.0,
+                "max": 364.7,
+                "mean": 0.0312,
+                "stddev": 0.7958,
+                "skewness": 133.4576,
+                "contains_negatives": false
+            },
+            "Temperature(F)_multiply_Precipitation(in)": {
+                "min": -4.41,
+                "max": 2334.08,
+                "mean": 0.3753,
+                "stddev": 5.5648,
+                "skewness": 101.8945,
+                "contains_negatives": true
             },
             "Visibility(mi)_bin": {
                 "min": 0.0,
@@ -292,76 +297,68 @@
                 "true_ratio": 0.3734,
                 "type": "binary_integer"
             },
-            "is_fair": {
-                "true_ratio": 0.3312,
+            "is_highway": {
+                "true_ratio": 0.3608,
                 "type": "binary_integer"
             },
-            "is_cloudy": {
-                "true_ratio": 0.424,
+            "is_county_road": {
+                "true_ratio": 0.0033,
+                "type": "binary_integer"
+            },
+            "is_state_road": {
+                "true_ratio": 0.0255,
+                "type": "binary_integer"
+            },
+            "is_local_street": {
+                "true_ratio": 0.466,
+                "type": "binary_integer"
+            },
+            "is_us_route": {
+                "true_ratio": 0.0479,
+                "type": "binary_integer"
+            },
+            "is_expressway": {
+                "true_ratio": 0.001,
+                "type": "binary_integer"
+            },
+            "is_national_highway": {
+                "true_ratio": 0.0032,
+                "type": "binary_integer"
+            },
+            "is_rain": {
+                "true_ratio": 0.0812,
+                "type": "binary_integer"
+            },
+            "is_snow": {
+                "true_ratio": 0.0214,
+                "type": "binary_integer"
+            },
+            "is_fog": {
+                "true_ratio": 0.025,
+                "type": "binary_integer"
+            },
+            "is_clear": {
+                "true_ratio": 0.447,
+                "type": "binary_integer"
+            },
+            "is_overcast": {
+                "true_ratio": 0.4218,
                 "type": "binary_integer"
             },
             "is_clear": {
                 "true_ratio": 0.1135,
                 "type": "binary_integer"
             },
-            "is_rain": {
-                "true_ratio": 0.0901,
-                "type": "binary_integer"
-            },
-            "is_snow": {
-                "true_ratio": 0.021,
-                "type": "binary_integer"
-            },
-            "is_fog": {
-                "true_ratio": 0.0143,
-                "type": "binary_integer"
-            },
-            "is_severe": {
+            "is_extreme_weather": {
                 "true_ratio": 0.0057,
                 "type": "binary_integer"
             },
-            "is_winter": {
-                "true_ratio": 0.0211,
+            "is_severe": {
+                "true_ratio": 0.0173,
                 "type": "binary_integer"
             },
-            "is_mixed_precip": {
-                "true_ratio": 0.0898,
-                "type": "binary_integer"
-            },
-            "is_visibility_reduced": {
+            "is_low_visibility": {
                 "true_ratio": 0.025,
-                "type": "binary_integer"
-            },
-            "is_highway": {
-                "true_ratio": 0.4027,
-                "type": "binary_integer"
-            },
-            "is_county_road": {
-                "true_ratio": 0.028,
-                "type": "binary_integer"
-            },
-            "is_local_street": {
-                "true_ratio": 0.463,
-                "type": "binary_integer"
-            },
-            "is_residential": {
-                "true_ratio": 0.4589,
-                "type": "binary_integer"
-            },
-            "is_bus_route": {
-                "true_ratio": 0.1766,
-                "type": "binary_integer"
-            },
-            "is_north_south": {
-                "true_ratio": 0.0091,
-                "type": "binary_integer"
-            },
-            "is_east_west": {
-                "true_ratio": 0.0099,
-                "type": "binary_integer"
-            },
-            "is_major_road": {
-                "true_ratio": 0.0847,
                 "type": "binary_integer"
             }
         },
