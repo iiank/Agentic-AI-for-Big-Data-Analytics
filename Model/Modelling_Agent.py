@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, TypedDict
 
+from dotenv import load_dotenv
 from openai import OpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
@@ -24,6 +25,7 @@ def border(s):
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
+load_dotenv()
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
@@ -356,7 +358,10 @@ print(f"Loaded: {engineered_df.count():,} rows")
 
 # ── Load FE agent state ───────────────────────────────────────────────────────
 
-FE_STATE_PATH = PROJECT_ROOT.parent / "FE" / "fe_agent_state.json"
+current_dir = Path(__file__).parent.resolve()
+project_root = current_dir.parent
+
+FE_STATE_PATH = project_root / "FE" / "state" / "fe_agent_state.json"
 if not FE_STATE_PATH.exists():
     raise FileNotFoundError(f"FE agent state not found at: {FE_STATE_PATH}")
 
