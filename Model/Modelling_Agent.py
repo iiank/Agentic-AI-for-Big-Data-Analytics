@@ -14,7 +14,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command, interrupt
 
-from Modelling_Skills import MODEL_REGISTRY, run_training
+from Modelling_Skills import MODEL_REGISTRY, run_training, run_threshold_tuning
 
 # Visual helper function (Only for printing purposes)
 def border(s):
@@ -42,6 +42,7 @@ class AgentState(TypedDict):
     primary_results:       Dict[str, Any]   # training results for primary model
     secondary_results:     Dict[str, Any]   # training results for secondary model
     evaluation_decision:   Dict[str, Any]   # LLM Call 2: winner + narrative + next_action
+    tuning_results:        Dict[str, Any]   # threshold tuning results (if tune_threshold chosen)
     modelling_log:         Annotated[List[str], operator.add]
 
 
@@ -92,10 +93,10 @@ def build_model_selection_context(state: AgentState) -> Dict:
     if state.get("iteration", 0) > 0:
         prev_eval = state.get("evaluation_decision", {})
         ctx["previous_attempt"] = {
-            "primary_model":   state["primary_results"].get("model_name"),
-            "primary_auc":     state["primary_results"].get("auc"),
-            "secondary_model": state["secondary_results"].get("model_name"),
-            "secondary_auc":   state["secondary_results"].get("auc"),
+            "primary_model":    state["primary_results"].get("model_name"),
+            "primary_auc_pr":   state["primary_results"].get("auc_pr"),
+            "secondary_model":  state["secondary_results"].get("model_name"),
+            "secondary_auc_pr": state["secondary_results"].get("auc_pr"),
             "retrain_guidance": prev_eval.get("retrain_guidance"),
         }
 
@@ -103,17 +104,25 @@ def build_model_selection_context(state: AgentState) -> Dict:
 
 
 def build_evaluation_context(state: AgentState) -> Dict:
+    def model_payload(results: Dict) -> Dict:
+        return {
+            "metrics": {
+                "auc_pr":           results.get("auc_pr"),
+                "auc_roc":          results.get("auc_roc"),
+                "recall_class1":    results.get("recall_class1"),
+                "precision_class1": results.get("precision_class1"),
+            },
+            "confusion_matrix": results.get("confusion_matrix", {}),
+            "best_params":      results.get("best_params", {}),
+        }
+
     return {
-        "call":             2,
-        "iteration":        state.get("iteration", 0),
-        "max_iterations":   2,
-        "auc_threshold":    0.80,
-        "primary_model":    state["primary_results"]["model_name"],
-        "primary_auc":      state["primary_results"]["auc"],
-        "primary_params":   state["primary_results"].get("best_params", {}),
-        "secondary_model":  state["secondary_results"]["model_name"],
-        "secondary_auc":    state["secondary_results"]["auc"],
-        "secondary_params": state["secondary_results"].get("best_params", {}),
+        "iteration":       state.get("iteration", 0),
+        "max_iterations":  2,
+        "primary_model":   state["primary_results"]["model_name"],
+        "primary":         model_payload(state["primary_results"]),
+        "secondary_model": state["secondary_results"]["model_name"],
+        "secondary":       model_payload(state["secondary_results"]),
     }
 
 
@@ -230,22 +239,53 @@ def evaluation_node(state: AgentState) -> dict:
     context  = build_evaluation_context(state)
     decision = call_llm(context)
 
-    print(f"  Winner      : {decision['winner']} (AUC {decision['winner_auc']})")
-    print(f"  Runner-up   : {decision['runner_up']} (AUC {decision['runner_up_auc']})")
+    winner         = decision["winner"]
+    winner_results = (
+        state["primary_results"] if state["primary_results"]["model_name"] == winner
+        else state["secondary_results"]
+    )
+
+    print(f"  Winner      : {winner}")
+    print(f"  AUC-PR      : {winner_results.get('auc_pr')} | AUC-ROC: {winner_results.get('auc_roc')}")
+    print(f"  Recall@1    : {winner_results.get('recall_class1')} | Precision@1: {winner_results.get('precision_class1')}")
     print(f"  Next action : {decision.get('next_action')}")
     if decision.get("next_action") == "retrain":
         print(f"  Guidance    : {decision.get('retrain_guidance')}")
+    if decision.get("next_action") == "tune_threshold":
+        print(f"  Tune note   : {decision.get('tune_guidance')}")
     print(f"  Narrative   : {decision['narrative']}")
 
     return {
         "evaluation_decision": decision,
         "iteration": state.get("iteration", 0) + 1,
         "modelling_log": [
-            f"[evaluation] winner={decision['winner']} | "
-            f"winner_auc={decision['winner_auc']} | "
-            f"runner_up={decision['runner_up']} | "
-            f"runner_up_auc={decision['runner_up_auc']} | "
+            f"[evaluation] winner={winner} | "
+            f"auc_pr={winner_results.get('auc_pr')} | "
+            f"recall={winner_results.get('recall_class1')} | "
             f"next_action={decision.get('next_action')}"
+        ],
+    }
+
+
+def threshold_tuning_node(state: AgentState) -> dict:
+    """Sweeps decision thresholds for the winner model on the held-out test set."""
+    print("\n[Modelling Agent] Node: threshold_tuning")
+
+    winner = state["evaluation_decision"]["winner"]
+    print(f"  Tuning threshold for: {winner}")
+
+    tuning = run_threshold_tuning(
+        df=engineered_df,
+        model_name=winner,
+        feature_cols=state["feature_cols"],
+    )
+
+    return {
+        "tuning_results": tuning,
+        "modelling_log": [
+            f"[threshold_tuning] model={winner} | "
+            f"best_threshold={tuning.get('best_threshold')} | "
+            f"skipped={tuning.get('skipped', False)}"
         ],
     }
 
@@ -253,11 +293,16 @@ def evaluation_node(state: AgentState) -> dict:
 # ── Routing ──────────────────────────────────────────────────────────────────
 
 def route_after_evaluation(state: AgentState) -> str:
-    decision  = state.get("evaluation_decision", {})
-    iteration = state.get("iteration", 0)
-    if decision.get("next_action") == "retrain" and iteration < 2:
+    decision    = state.get("evaluation_decision", {})
+    iteration   = state.get("iteration", 0)
+    next_action = decision.get("next_action")
+
+    if next_action == "retrain" and iteration < 2:
         print(f"\n  [Router] Retrying — iteration {iteration}/2")
         return "model_selection_node"
+    if next_action == "tune_threshold":
+        print(f"\n  [Router] Threshold tuning for winner: {decision.get('winner')}")
+        return "threshold_tuning_node"
     print(f"\n  [Router] Accepting results after iteration {iteration}")
     return END
 
@@ -266,19 +311,25 @@ def route_after_evaluation(state: AgentState) -> str:
 
 workflow = StateGraph(AgentState)
 
-workflow.add_node("model_selection_node", model_selection_node)
-workflow.add_node("human_review_node",    human_review_node)
-workflow.add_node("training_node",        training_node)
-workflow.add_node("evaluation_node",      evaluation_node)
+workflow.add_node("model_selection_node",  model_selection_node)
+workflow.add_node("human_review_node",     human_review_node)
+workflow.add_node("training_node",         training_node)
+workflow.add_node("evaluation_node",       evaluation_node)
+workflow.add_node("threshold_tuning_node", threshold_tuning_node)
 
 workflow.set_entry_point("model_selection_node")
-workflow.add_edge("model_selection_node", "human_review_node")
-workflow.add_edge("human_review_node",    "training_node")
-workflow.add_edge("training_node",        "evaluation_node")
+workflow.add_edge("model_selection_node",  "human_review_node")
+workflow.add_edge("human_review_node",     "training_node")
+workflow.add_edge("training_node",         "evaluation_node")
+workflow.add_edge("threshold_tuning_node", END)
 workflow.add_conditional_edges(
     "evaluation_node",
     route_after_evaluation,
-    {"model_selection_node": "model_selection_node", END: END},
+    {
+        "model_selection_node":  "model_selection_node",
+        "threshold_tuning_node": "threshold_tuning_node",
+        END:                     END,
+    },
 )
 
 checkpointer    = MemorySaver()
@@ -394,6 +445,7 @@ initial_state: AgentState = {
     "primary_results":       {},
     "secondary_results":     {},
     "evaluation_decision":   {},
+    "tuning_results":        {},
     "modelling_log":         [],
 }
 
@@ -439,9 +491,24 @@ while modelling_agent.get_state(config).next:
     print("MODELLING AGENT COMPLETE")
     print("=" * 60)
 
-    ev = final_state["evaluation_decision"]
-    print(f"Winner    : {ev.get('winner')} (AUC {ev.get('winner_auc')})")
-    print(f"Runner-up : {ev.get('runner_up')} (AUC {ev.get('runner_up_auc')})")
+    ev             = final_state["evaluation_decision"]
+    winner         = ev.get("winner")
+    winner_results = (
+        final_state["primary_results"] if final_state["primary_results"].get("model_name") == winner
+        else final_state["secondary_results"]
+    )
+    print(f"Winner    : {winner}")
+    print(f"  AUC-PR        : {winner_results.get('auc_pr')}")
+    print(f"  AUC-ROC       : {winner_results.get('auc_roc')}")
+    print(f"  Recall@1      : {winner_results.get('recall_class1')}")
+    print(f"  Precision@1   : {winner_results.get('precision_class1')}")
+    print(f"Runner-up : {ev.get('runner_up')}")
+    if final_state.get("tuning_results") and not final_state["tuning_results"].get("skipped"):
+        tr = final_state["tuning_results"]
+        print(f"\nThreshold tuning result:")
+        print(f"  Best threshold : {tr.get('best_threshold')}")
+        print(f"  Recall@1       : {tr['best_metrics'].get('recall_class1')}")
+        print(f"  Precision@1    : {tr['best_metrics'].get('precision_class1')}")
     print(f"\nNarrative (for report):\n{ev.get('narrative')}")
 
     print("\nFull audit log:")

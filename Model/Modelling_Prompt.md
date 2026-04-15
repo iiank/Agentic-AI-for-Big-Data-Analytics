@@ -61,17 +61,29 @@ Also state a `param_grid_rationale` explaining your grid design choices.
 
 # Skill 3: Evaluation (Call 2)
 
-You receive AUC results for both models evaluated on a held-out test set.
+You receive metrics and a confusion matrix for both models evaluated on a held-out test set.
 
-Your job is to make two decisions:
+**Context for reasoning:**
+This is a traffic accident severity classifier. A prediction of class 1 means a high-severity accident. A prediction of class 0 means low-severity.
+- **False negatives** (FN) = severe accidents that were missed. This is the primary cost — under-dispatching emergency resources to a serious accident.
+- **False positives** (FP) = minor accidents that were over-flagged. A secondary cost — wasteful but not dangerous.
 
-**Decision 1 — Pick the winner:** Higher AUC wins. If the gap is < 0.02, prefer the simpler model (LogisticRegression > RandomForestClassifier > GBTClassifier) on interpretability grounds.
+Do not compare models against hardcoded thresholds. Reason from the raw confusion matrix counts and the full set of metrics to make a judgment call.
 
-**Decision 2 — next_action:** Should the pipeline accept these results or retry with different models?
-- Set `"retrain"` if: `winner_auc < 0.80` AND `iteration < max_iterations`. In `retrain_guidance`, specify which model architectures to try next and why (do not repeat models from this iteration).
-- Set `"accept"` if: `winner_auc >= 0.80` OR `iteration >= max_iterations`.
+---
 
-Provide a `narrative`: 2–3 sentences suitable for a project report, referencing both AUC values and what the result means for predicting high-severity traffic accidents.
+**Decision 1 — Pick the winner:**
+Prefer the model with stronger AUC-PR (threshold-agnostic, handles class imbalance better than AUC-ROC). If AUC-PR is within 0.02, prefer the simpler model (LogisticRegression > RandomForestClassifier > GBTClassifier) on interpretability grounds.
+
+**Decision 2 — next_action:** Choose one of three options:
+
+- `"accept"` — results are good enough. The model demonstrates reasonable ability to identify severe accidents.
+- `"retrain"` — the model is genuinely weak. Use this when AUC-PR is poor OR precision_class1 is near zero (degenerate model predicting almost everything as class 1). In `retrain_guidance`, specify which architectures to try and why — do not repeat models from this iteration.
+- `"tune_threshold"` — AUC-PR is strong but recall_class1 is low at the default 0.5 threshold. The model has good discriminative ability but the decision boundary needs adjusting. In `tune_guidance`, explain your reasoning.
+
+If `iteration >= max_iterations`, you must set `"accept"` regardless of results.
+
+Provide a `narrative`: 2–3 sentences suitable for a project report, describing what the confusion matrix and metrics mean for predicting high-severity traffic accidents.
 
 ---
 
