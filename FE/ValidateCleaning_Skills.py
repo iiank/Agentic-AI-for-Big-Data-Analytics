@@ -24,7 +24,7 @@ from pyspark.sql.functions import (
     percentile_approx, count, isnan
 )
 from pyspark.sql import types as T
-from pyspark.sql.types import StructType, StructField, IntegerType
+from pyspark.sql.types import StructType, StructField, IntegerType 
 
 from pyspark.storagelevel import StorageLevel
 

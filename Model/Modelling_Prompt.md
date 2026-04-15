@@ -104,3 +104,4 @@ Return exactly this JSON. No extra fields, no markdown.
   "next_action": "accept" | "retrain",
   "retrain_guidance": "<if next_action is retrain: which models to try and why. If accept: null>"
 }
+

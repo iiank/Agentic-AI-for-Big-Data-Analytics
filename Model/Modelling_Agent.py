@@ -369,7 +369,7 @@ if not FE_STATE_PATH.exists():
 with open(FE_STATE_PATH) as f:
     fe_state = json.load(f)
 
-# Exclude high_severity — it is derived from the target and causes leakage
+# Exclude high_severity — it is derived from the target and causes leakage 
 feature_cols = [c for c in fe_state["feature_columns"] if c != "high_severity"]
 
 # Derive binary class distribution from FE stats report
