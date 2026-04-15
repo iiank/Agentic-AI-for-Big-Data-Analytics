@@ -4,14 +4,11 @@
 
 import os
 import json
-import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, functions as F
 from pyspark.sql.functions import col, when
-from pyspark.sql.types import StructType, StructField, IntegerType
-from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.classification import (
     LogisticRegression,
@@ -23,18 +20,8 @@ from pyspark.ml.classification import (
     LinearSVC,
     LinearSVCModel,
 )
-from pyspark.ml.regression import (
-    LinearRegression,
-    RandomForestRegressor,
-    GBTRegressor,
-)
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
-from pyspark.sql import functions as F
-
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import TomekLinks
-from imblearn.combine import SMOTETomek
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -102,41 +89,6 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         }
     },
  
-    # ── Regression ────────────────────────────────────────────────────────────
- 
-    "LinearRegression": {
-        "class":   LinearRegression,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "regParam":        [0.001, 0.01, 0.1, 1.0],
-            "elasticNetParam": [0.0, 0.5, 1.0],
-            "maxIter":         [100, 200],
-        }
-    },
- 
-    "RandomForestRegressor": {
-        "class":   RandomForestRegressor,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "numTrees":            [100, 200, 300],
-            "maxDepth":            [5, 10, 15],
-            "minInstancesPerNode": [10, 50, 100],
-        }
-    },
- 
-    "GBTRegressor": {
-        "class":   GBTRegressor,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "maxIter":  [50, 100],
-            "maxDepth": [5, 10],
-            "stepSize": [0.05, 0.1],
-        }
-    },
- 
 }
 
 
@@ -154,7 +106,7 @@ def run_training(
       1. Missing feature guard
       2. VectorAssembler
       3. 80/20 train/test split
-      4. Downsample majority + SMOTETomek on train set
+      4. Downsample majority to match minority (50:50 balanced train)
       5. 3-fold CrossValidator on balanced train
       6. Evaluate best model on held-out test set
 
@@ -166,7 +118,8 @@ def run_training(
         seed:            Random seed for reproducibility.
 
     Returns:
-        Dict with keys: model_name, auc, best_params, feature_importances, missing_features.
+        Dict with keys: model_name, auc_roc, auc_pr, recall_class1, precision_class1,
+        confusion_matrix, best_params, feature_importances, missing_features.
     """
     if model_name not in MODEL_REGISTRY:
         raise ValueError(f"Model '{model_name}' not in MODEL_REGISTRY.")
@@ -428,6 +381,155 @@ def run_threshold_tuning(
         "all_thresholds":     results_by_threshold,
         "skipped":            False,
     }
+
+
+# ── Full Evaluation ───────────────────────────────────────────────────────────
+
+def run_full_evaluation(
+    df: DataFrame,
+    model_name: str,
+    feature_cols: List[str],
+    seed: int = 42,
+) -> None:
+    """
+    Generates full evaluation artefacts for a saved model on the held-out test set:
+      - Classification report (precision / recall / F1 for both classes)
+      - Confusion matrix heatmap
+      - ROC curve (with AUC-ROC)
+      - Precision-Recall curve (with AUC-PR)
+
+    Plots are saved to saved_models/{model_name}/.
+    Requires matplotlib and sklearn (post-hoc visualisation only, not part of training).
+    """
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import (
+        classification_report,
+        confusion_matrix,
+        roc_curve,
+        auc,
+        precision_recall_curve,
+        average_precision_score,
+    )
+
+    print(f"\n[Full Evaluation] {model_name}")
+
+    # ── 1. Recreate same test set ──────────────────────────────────────────────
+    if LABEL_COL not in df.columns:
+        df = df.withColumn(LABEL_COL, F.when(F.col("Severity") >= 3, 1).otherwise(0))
+
+    actual_cols    = set(df.columns)
+    valid_features = [c for c in feature_cols if c in actual_cols]
+
+    if FEATURES_COL in df.columns:
+        df = df.drop(FEATURES_COL)
+
+    assembler    = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
+    df_assembled = assembler.transform(df).select(FEATURES_COL, LABEL_COL)
+    _, test_df   = df_assembled.randomSplit([0.8, 0.2], seed=seed)
+
+    # ── 2. Load saved model ────────────────────────────────────────────────────
+    try:
+        _base = Path(__file__).parent
+    except NameError:
+        _base = Path.cwd()
+
+    save_dir   = _base / "saved_models" / model_name
+    load_class = MODEL_REGISTRY[model_name]["load_class"]
+    model      = load_class.load(str(save_dir / "model"))
+
+    # ── 3. Get predictions ─────────────────────────────────────────────────────
+    preds = model.transform(test_df)
+
+    has_probability = "probability" in preds.columns
+    if has_probability:
+        preds_pd = preds.select(
+            F.col("prediction").cast("int").alias("pred"),
+            F.col(LABEL_COL).alias("label"),
+            F.col("probability")[1].alias("prob1"),
+        ).toPandas()
+    else:
+        preds_pd = preds.select(
+            F.col("prediction").cast("int").alias("pred"),
+            F.col(LABEL_COL).alias("label"),
+        ).toPandas()
+
+    y_true = preds_pd["label"].values
+    y_pred = preds_pd["pred"].values
+
+    # ── 4. Classification report ───────────────────────────────────────────────
+    print(f"\n  Classification Report — {model_name}")
+    print("  " + "-" * 50)
+    report = classification_report(
+        y_true, y_pred,
+        target_names=["Low Severity (0)", "High Severity (1)"],
+    )
+    for line in report.splitlines():
+        print(f"  {line}")
+
+    # ── 5. Confusion matrix heatmap ────────────────────────────────────────────
+    cm = confusion_matrix(y_true, y_pred)
+    fig, ax = plt.subplots(figsize=(5, 4))
+    im = ax.imshow(cm, interpolation="nearest", cmap="Blues")
+    plt.colorbar(im, ax=ax)
+    ax.set(
+        xticks=[0, 1], yticks=[0, 1],
+        xticklabels=["Pred: Low", "Pred: High"],
+        yticklabels=["Act: Low", "Act: High"],
+        title=f"Confusion Matrix — {model_name}",
+        ylabel="Actual", xlabel="Predicted",
+    )
+    for i in range(2):
+        for j in range(2):
+            ax.text(j, i, f"{cm[i, j]:,}", ha="center", va="center",
+                    color="white" if cm[i, j] > cm.max() / 2 else "black")
+    plt.tight_layout()
+    cm_path = save_dir / "confusion_matrix.png"
+    plt.savefig(cm_path, dpi=150)
+    plt.close()
+    print(f"  Saved: {cm_path}")
+
+    if not has_probability:
+        print(f"  [info] {model_name} has no probability output — ROC and PR curves skipped.")
+        return
+
+    y_prob = preds_pd["prob1"].values
+
+    # ── 6. ROC curve ──────────────────────────────────────────────────────────
+    fpr, tpr, _ = roc_curve(y_true, y_prob)
+    auc_roc     = auc(fpr, tpr)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.plot(fpr, tpr, lw=2, label=f"AUC-ROC = {auc_roc:.4f}")
+    ax.plot([0, 1], [0, 1], "k--", lw=1)
+    ax.set(
+        xlabel="False Positive Rate", ylabel="True Positive Rate",
+        title=f"ROC Curve — {model_name}",
+        xlim=[0, 1], ylim=[0, 1.02],
+    )
+    ax.legend(loc="lower right")
+    plt.tight_layout()
+    roc_path = save_dir / "roc_curve.png"
+    plt.savefig(roc_path, dpi=150)
+    plt.close()
+    print(f"  Saved: {roc_path}")
+
+    # ── 7. Precision-Recall curve ─────────────────────────────────────────────
+    precision_vals, recall_vals, _ = precision_recall_curve(y_true, y_prob)
+    auc_pr = average_precision_score(y_true, y_prob)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    ax.plot(recall_vals, precision_vals, lw=2, label=f"AUC-PR = {auc_pr:.4f}")
+    baseline = y_true.sum() / len(y_true)
+    ax.axhline(y=baseline, color="k", linestyle="--", lw=1, label=f"Baseline = {baseline:.3f}")
+    ax.set(
+        xlabel="Recall", ylabel="Precision",
+        title=f"Precision-Recall Curve — {model_name}",
+        xlim=[0, 1], ylim=[0, 1.02],
+    )
+    ax.legend(loc="upper right")
+    plt.tight_layout()
+    pr_path = save_dir / "pr_curve.png"
+    plt.savefig(pr_path, dpi=150)
+    plt.close()
+    print(f"  Saved: {pr_path}")
 
 
 # ── Private Helpers ───────────────────────────────────────────────────────────

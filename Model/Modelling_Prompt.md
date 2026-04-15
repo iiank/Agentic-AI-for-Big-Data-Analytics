@@ -5,7 +5,7 @@ Your task is binary classification: predicting high-severity accidents (Severity
 
 You will be called twice:
 - **Call 1 (Model Selection):** Select TWO classification models to compare and propose hyperparameter grids for both.
-- **Call 2 (Evaluation):** Given AUC results for both models, pick the winner and produce a narrative.
+- **Call 2 (Evaluation):** Given metrics and a confusion matrix for both models, pick the winner and decide the next action.
 
 You must output strictly valid JSON with no markdown formatting, no code blocks, no preamble.
 
@@ -75,13 +75,13 @@ Do not compare models against hardcoded thresholds. Reason from the raw confusio
 **Decision 1 — Pick the winner:**
 Prefer the model with stronger AUC-PR (threshold-agnostic, handles class imbalance better than AUC-ROC). If AUC-PR is within 0.02, prefer the simpler model (LogisticRegression > RandomForestClassifier > GBTClassifier) on interpretability grounds.
 
-**Decision 2 — next_action:** Choose one of three options:
+**Decision 2 — next_action:** Consider the full picture — confusion matrix counts, AUC-PR, recall, and precision together — and make a judgment call.
 
-- `"accept"` — results are good enough. The model demonstrates reasonable ability to identify severe accidents.
-- `"retrain"` — the model is genuinely weak. Use this when AUC-PR is poor OR precision_class1 is near zero (degenerate model predicting almost everything as class 1). In `retrain_guidance`, specify which architectures to try and why — do not repeat models from this iteration.
-- `"tune_threshold"` — AUC-PR is strong but recall_class1 is low at the default 0.5 threshold. The model has good discriminative ability but the decision boundary needs adjusting. In `tune_guidance`, explain your reasoning.
+- `"accept"` — the model is fit for purpose. It demonstrates meaningful ability to distinguish high-severity accidents, even if imperfect.
+- `"retrain"` — the model is fundamentally limited and a different architecture is needed. Signals include very poor AUC-PR (weak discrimination regardless of threshold), or near-zero precision (degenerate — nearly everything predicted as severe). Provide `retrain_guidance` with specific architectural changes; do not repeat models from this iteration.
+- `"tune_threshold"` — the model discriminates well (strong AUC-PR) but is missing too many severe accidents at the default 0.5 threshold. The issue is the decision boundary, not the model. Provide `tune_guidance` explaining the trade-off.
 
-If `iteration >= max_iterations`, you must set `"accept"` regardless of results.
+If `iteration >= max_iterations`, set `"accept"` — do not trigger further runs.
 
 Provide a `narrative`: 2–3 sentences suitable for a project report, describing what the confusion matrix and metrics mean for predicting high-severity traffic accidents.
 
@@ -109,10 +109,9 @@ Return exactly this JSON. No extra fields, no markdown.
 
 {
   "winner": "<model name>",
-  "winner_auc": <float>,
   "runner_up": "<model name>",
-  "runner_up_auc": <float>,
   "narrative": "<2-3 sentence plain-English summary for the project report>",
-  "next_action": "accept" | "retrain",
-  "retrain_guidance": "<if next_action is retrain: which models to try and why. If accept: null>"
+  "next_action": "accept" | "retrain" | "tune_threshold",
+  "retrain_guidance": "<if next_action is retrain: which models to try and why. Otherwise null>",
+  "tune_guidance": "<if next_action is tune_threshold: why AUC-PR is strong but recall is low at 0.5. Otherwise null>"
 }
