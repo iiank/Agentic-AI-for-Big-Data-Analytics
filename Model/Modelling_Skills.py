@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from pyspark.sql import DataFrame
+from pyspark.ml.linalg import Vectors, VectorUDT
+from pyspark.sql.functions import udf
 from pyspark.sql.functions import col, when
 from pyspark.sql.types import StructType, StructField, IntegerType
 from pyspark.ml.linalg import Vectors, VectorUDT
@@ -44,9 +46,9 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
         "tunable": {
-            "regParam":        [0.001, 0.01, 0.1, 1.0],
-            "elasticNetParam": [0.0, 0.5, 1.0],
-            "maxIter":         [100, 200],
+            "regParam":        [0.001, 0.01],
+            "elasticNetParam": [0.0, 0.5],
+            "maxIter":         [100],
         }
     },
  
@@ -66,9 +68,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
-            "maxIter":             [20, 50],
-            "maxDepth":            [5, 7],
-            "stepSize":            [0.05, 0.1]
+            "maxIter":             [20],
+            "maxDepth":            [5]
         }
     },
  
@@ -171,10 +172,24 @@ def run_training(
     if FEATURES_COL in test_df.columns:
         test_df = test_df.drop(FEATURES_COL)
 
-    assembler    = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
-    train_df_assembled = assembler.transform(train_df).select(FEATURES_COL, LABEL_COL)
-    test_df_assembled = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
+    assembler = VectorAssembler(
+        inputCols=valid_features,
+        outputCol=FEATURES_COL,
+        handleInvalid="skip"
+    )
 
+    train_df_assembled = assembler.transform(train_df).select(FEATURES_COL, LABEL_COL)
+    test_df_assembled  = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
+
+    # Strip ML attribute metadata by recreating the vector
+    to_dense_udf = udf(lambda v: Vectors.dense(v.toArray().tolist()), VectorUDT())
+
+    train_df_assembled = train_df_assembled.withColumn(
+        FEATURES_COL, to_dense_udf(col(FEATURES_COL))
+    )
+    test_df_assembled = test_df_assembled.withColumn(
+        FEATURES_COL, to_dense_udf(col(FEATURES_COL))
+    )
     # ── 3. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
     train_class_counts = train_df_assembled.groupBy(LABEL_COL).count().collect()
@@ -184,25 +199,17 @@ def run_training(
     minority_n   = train_counts[minority_lbl]
     majority_n   = train_counts[majority_lbl]
     
-    # Calculate the midpoint
-    target_n = int((minority_n + majority_n) / 2)
-    
     print(f"  Train counts - majority: {majority_n:,} | minority: {minority_n:,}")
-    print(f"  Target count per class : {target_n:,} (Midpoint)")
-    
-    # Downsample majority
-    fraction_majority = target_n / majority_n
-    majority_df = train_df_assembled.filter(col(LABEL_COL) == majority_lbl) \
-        .sample(withReplacement=False, fraction=fraction_majority, seed=seed)
-        
-    # Upsample minority
-    fraction_minority = target_n / minority_n
-    minority_df = train_df_assembled.filter(col(LABEL_COL) == minority_lbl) \
-        .sample(withReplacement=True, fraction=fraction_minority, seed=seed)
-        
-    # Recombine into a single balanced training set
-    balanced_train = majority_df.unionAll(minority_df)
-    print(f"  Balanced train rows    : ~{target_n * 2:,}")
+
+    # Downsample majority to match minority exactly (50:50)
+    fraction_majority = minority_n / majority_n
+    balanced_train = train_df_assembled.stat.sampleBy(
+        LABEL_COL,
+        fractions={majority_lbl: fraction_majority, minority_lbl: 1.0},
+        seed=seed
+    )
+
+    print(f"  Downsampling majority to ~{minority_n:,} — balanced train: ~{minority_n * 2:,} rows")
 
     # ── 4. Build model + CrossValidator ───────────────────────────────────────
     registry  = MODEL_REGISTRY[model_name]

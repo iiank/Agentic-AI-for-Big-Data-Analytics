@@ -62,3 +62,7 @@ After encoding, use the output column name in assembler_cols:
 - string_index_ohe → {col}_ohe
 - string_index_only → {col}_idx
 - passthrough → {col}
+
+## CRITICAL RULES:
+- If a geographical column has extreme cardinality (>100,000 unique values, such as Zipcode), you MUST use the 'drop' action. It is too granular and will cause the downstream Decision Trees to crash or overfit.
+- Rely on 'City', 'County', and 'State' for geographic clustering instead.
