@@ -278,7 +278,7 @@ def run_training(
 # ── Threshold Tuning ─────────────────────────────────────────────────────────
 
 def run_threshold_tuning(
-    df: DataFrame,
+    test_df: DataFrame,
     model_name: str,
     feature_cols: List[str],
     thresholds: Optional[List[float]] = None,
@@ -306,18 +306,17 @@ def run_threshold_tuning(
         return {"skipped": True, "reason": f"{model_name} does not output a probability column"}
 
     # ── 1. Recreate same test set ──────────────────────────────────────────────
-    if LABEL_COL not in df.columns:
-        df = df.withColumn(LABEL_COL, F.when(F.col("Severity") >= 3, 1).otherwise(0))
+    if LABEL_COL not in test_df.columns:
+        test_df = test_df.withColumn(LABEL_COL, F.when(F.col("Severity") >= 3, 1).otherwise(0))
 
-    actual_cols    = set(df.columns)
+    actual_cols    = set(test_df.columns)
     valid_features = [c for c in feature_cols if c in actual_cols]
 
-    if FEATURES_COL in df.columns:
-        df = df.drop(FEATURES_COL)
+    if FEATURES_COL in test_df.columns:
+        test_df = test_df.drop(FEATURES_COL)
 
     assembler    = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
-    df_assembled = assembler.transform(df).select(FEATURES_COL, LABEL_COL)
-    _, test_df   = df_assembled.randomSplit([0.8, 0.2], seed=seed)
+    test_df = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
 
     # ── 2. Load saved model ────────────────────────────────────────────────────
     try:
