@@ -58,7 +58,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
     "RandomForestClassifier": {
         "class":   RandomForestClassifier,
         "task":    "classification",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "maxBins": 128},
         "tunable": {
             "numTrees":            [100, 200, 300],
             "maxDepth":            [5, 10, 15],
@@ -69,13 +69,11 @@ MODEL_REGISTRY: Dict[str, Dict] = {
     "GBTClassifier": {
         "class":   GBTClassifier,
         "task":    "classification",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt"},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
             "maxIter":             [50, 100],
-            "maxDepth":            [5, 7, 10],
-            "stepSize":            [0.05, 0.1],
-            "subsamplingRate":     [0.7, 0.8],
-            "minInstancesPerNode": [5, 10],
+            "maxDepth":            [5, 10],
+            "stepSize":            [0.05, 0.1]
         }
     },
  
@@ -130,7 +128,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
 # ── Training Function ─────────────────────────────────────────────────────────
 
 def run_training(
-    df: DataFrame,
+    train_df: DataFrame,
+    test_df: DataFrame,
     model_name: str,
     param_grid_spec: Dict[str, List],
     feature_cols: List[str],
@@ -141,7 +140,7 @@ def run_training(
       1. Missing feature guard
       2. VectorAssembler
       3. 80/20 train/test split
-      4. Downsample majority + SMOTETomek on train set
+      4. Downsample majority on train set
       5. 3-fold CrossValidator on balanced train
       6. Evaluate best model on held-out test set
 
@@ -159,30 +158,31 @@ def run_training(
         raise ValueError(f"Model '{model_name}' not in MODEL_REGISTRY.")
 
     # ── 0. Create Severity_Binary if not present ──────────────────────────────
-    if LABEL_COL not in df.columns:
-        df = df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
+    if LABEL_COL not in train_df.columns:
+        train_df = train_df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
+    if LABEL_COL not in test_df.columns:
+        test_df = test_df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
 
     # ── 1. Missing feature guard ───────────────────────────────────────────────
-    actual_cols    = set(df.columns)
+    actual_cols    = set(train_df.columns)
     valid_features = [c for c in feature_cols if c in actual_cols]
     missing        = [c for c in feature_cols if c not in actual_cols]
     if missing:
         print(f"  [warn] Missing features skipped: {missing}")
 
     # ── 2. Assemble feature vector ─────────────────────────────────────────────
-    if FEATURES_COL in df.columns:
-        df = df.drop(FEATURES_COL)
+    if FEATURES_COL in train_df.columns:
+        train_df = train_df.drop(FEATURES_COL)
+    if FEATURES_COL in test_df.columns:
+        test_df = test_df.drop(FEATURES_COL)
 
-    assembler    = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
-    df_assembled = assembler.transform(df).select(FEATURES_COL, LABEL_COL)
+    assembler        = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
+    train_assembled  = assembler.transform(train_df).select(FEATURES_COL, LABEL_COL)
+    test_assembled   = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
 
     # ── 3. Train / test split ──────────────────────────────────────────────────
-    train_df, test_df = df_assembled.randomSplit([0.8, 0.2], seed=seed)
-    print(f"  Train: {train_df.count():,} rows | Test: {test_df.count():,} rows")
-
-    # ── 4. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
-    train_class_counts = train_df.groupBy(LABEL_COL).count().collect()
+    train_class_counts = train_assembled.groupBy(LABEL_COL).count().collect()
     train_counts = {int(row[LABEL_COL]): row["count"] for row in train_class_counts}
     minority_n   = int(min(train_counts.values()))
     majority_n   = int(max(train_counts.values()))
@@ -194,7 +194,7 @@ def run_training(
     }
     print(f"  Train class counts - majority: ~{majority_n:,} | minority: ~{minority_n:,}")
     print(f"  Downsampling majority to ~{minority_n:,} - balanced train: ~{minority_n * 2:,} rows")
-    balanced_train = train_df.stat.sampleBy(LABEL_COL, fractions, seed=seed)
+    balanced_train = train_assembled.stat.sampleBy(LABEL_COL, fractions, seed=seed)
 
     # ── 5. Build model + CrossValidator ───────────────────────────────────────
     registry  = MODEL_REGISTRY[model_name]
@@ -229,7 +229,7 @@ def run_training(
     best_model = cv_model.bestModel
 
     # ── 6. Evaluate on held-out test set ──────────────────────────────────────
-    preds = cv_model.transform(test_df)
+    preds = cv_model.transform(test_assembled)
     auc   = round(evaluator.evaluate(preds), 4)
     print(f"  {model_name} Test AUC: {auc}")
 

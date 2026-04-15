@@ -6,6 +6,7 @@
 import json
 import operator
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, TypedDict
 
@@ -24,6 +25,7 @@ def border(s):
 
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
+load_dotenv()
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
@@ -204,7 +206,8 @@ def training_node(state: AgentState) -> dict:
         print(f"\n[Modelling Agent] Node: training | {role}={model_name}")
 
         results = run_training(
-            df=engineered_df,
+            train_df=train_df,
+            test_df=test_df,
             model_name=model_name,
             param_grid_spec=param_grid,
             feature_cols=state["feature_cols"]
@@ -320,43 +323,45 @@ if "spark" in locals():
     spark.stop()
     print("Existing Spark session stopped.")
 
-spark = SparkSession.builder \
+spark = (
+    SparkSession.builder
     .master("local[*]") \
     .appName("SparkTest") \
-    .config("spark.driver.host",                       "127.0.0.1") \
-    .config("spark.driver.bindAddress",                "127.0.0.1") \
-    .config("spark.driver.memory",                     driver_memory) \
-    .config("spark.sql.shuffle.partitions",            cores * 3) \
-    .config("spark.default.parallelism",               cores) \
-    .config("spark.sql.adaptive.enabled",              "true") \
-    .config("spark.pyspark.python",                    PYTHON_PATH) \
-    .config("spark.pyspark.driver.python",             PYTHON_PATH) \
-    .config("spark.python.use.daemon",                 "false") \
-    .config("spark.python.worker.faulthandler.enabled","true") \
-    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true") \
-    .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true") \
+    .config("spark.driver.host",                       "127.0.0.1")
+    .config("spark.driver.bindAddress",                "127.0.0.1")
+    .config("spark.pyspark.python",                    PYTHON_PATH)
+    .config("spark.pyspark.driver.python",             PYTHON_PATH)
+    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true")
+    .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true")
+    .config("spark.driver.memory",                     driver_memory)
+    .config("spark.sql.shuffle.partitions",            cores * 3)
+    .config("spark.default.parallelism",               cores)
+    .config("spark.sql.adaptive.enabled",              "true")
+    .config("spark.python.use.daemon",                 "false")
+    .config("spark.python.worker.faulthandler.enabled","true")
+    .config("spark.driver.extraJavaOptions", "-Dlog4j.logger.org.apache.spark.storage.BlockManagerStorageEndpoint=FATAL")
     .getOrCreate()
+)
 
 spark.sparkContext.setLogLevel("ERROR")
 
 PROJECT_ROOT = Path.cwd()
-ENGINEERED_PARQUET_PATH = PROJECT_ROOT / "dataset/engineered_df.parquet"
-
-if not ENGINEERED_PARQUET_PATH.exists():
-    raise FileNotFoundError(f"Engineered Parquet not found at: {ENGINEERED_PARQUET_PATH}")
+TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset" / "train_parquet"
+TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset" / "test_parquet"
 
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
-print("Original Parquet:", ENGINEERED_PARQUET_PATH)
+print("Original Parquet:", TRAIN_PARQUET_PATH)
+print("Original Parquet:", TEST_PARQUET_PATH)
 
-engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH))
+train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
+test_df  = spark.read.parquet(str(TEST_PARQUET_PATH))
 
-border("Loading FE parquet")
-print(f"Loaded: {engineered_df.count():,} rows")
+print(f"Train: {train_df.count():,} rows | Test: {test_df.count():,} rows")
 
 # ── Load FE agent state ───────────────────────────────────────────────────────
 
-FE_STATE_PATH = PROJECT_ROOT.parent / "FE" / "fe_agent_state.json"
+FE_STATE_PATH = PROJECT_ROOT / "FE/state" / "fe_agent_state.json"
 if not FE_STATE_PATH.exists():
     raise FileNotFoundError(f"FE agent state not found at: {FE_STATE_PATH}")
 
