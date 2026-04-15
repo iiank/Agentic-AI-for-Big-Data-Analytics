@@ -23,7 +23,6 @@ from pyspark.ml.classification import (
 from pyspark.ml.evaluation import BinaryClassificationEvaluator, MulticlassClassificationEvaluator
 from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
-
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 LABEL_COL    = "Severity_Binary"
@@ -54,7 +53,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "load_class":          RandomForestClassificationModel,
         "task":                "classification",
         "supports_probability": True,
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "maxBins": 128},
         "tunable": {
             "numTrees":            [100, 200, 300],
             "maxDepth":            [5, 10, 15],
@@ -69,11 +68,9 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "supports_probability": True,
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt"},
         "tunable": {
-            "maxIter":             [50, 100],
-            "maxDepth":            [5, 7, 10],
-            "stepSize":            [0.05, 0.1],
-            "subsamplingRate":     [0.7, 0.8],
-            "minInstancesPerNode": [5, 10],
+            "maxIter":             [20, 50],
+            "maxDepth":            [5, 7],
+            "stepSize":            [0.05, 0.1]
         }
     },
 
@@ -95,7 +92,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
 # ── Training Function ─────────────────────────────────────────────────────────
 
 def run_training(
-    df: DataFrame,
+    train_df: DataFrame,
+    test_df: DataFrame,
     model_name: str,
     param_grid_spec: Dict[str, List],
     feature_cols: List[str],
@@ -105,13 +103,13 @@ def run_training(
     Full training pipeline for one model:
       1. Missing feature guard
       2. VectorAssembler
-      3. 80/20 train/test split
-      4. Downsample majority to match minority (50:50 balanced train)
-      5. 3-fold CrossValidator on balanced train
-      6. Evaluate best model on held-out test set
+      3. Downsample majority + upsample minority on train set
+      4. 3-fold CrossValidator on balanced train
+      5. Evaluate best model on held-out test set
 
     Args:
-        df:              Raw engineered Spark DataFrame (not yet assembled).
+        train_df:        Raw engineered training Spark DataFrame (not yet assembled).
+        test_df:         Raw engineered testing Spark DataFrame (not yet assembled).
         model_name:      Key from MODEL_REGISTRY.
         param_grid_spec: Dict of {param_name: [val1, val2, ...]} from LLM output.
         feature_cols:    Feature column names expected in df.
@@ -125,44 +123,58 @@ def run_training(
         raise ValueError(f"Model '{model_name}' not in MODEL_REGISTRY.")
 
     # ── 0. Create Severity_Binary if not present ──────────────────────────────
-    if LABEL_COL not in df.columns:
-        df = df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
+    if LABEL_COL not in train_df.columns:
+        train_df = train_df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
+    if LABEL_COL not in test_df.columns:
+        test_df = test_df.withColumn(LABEL_COL, when(col("Severity") >= 3, 1).otherwise(0))
 
     # ── 1. Missing feature guard ───────────────────────────────────────────────
-    actual_cols    = set(df.columns)
+    actual_cols    = set(train_df.columns)
     valid_features = [c for c in feature_cols if c in actual_cols]
     missing        = [c for c in feature_cols if c not in actual_cols]
     if missing:
         print(f"  [warn] Missing features skipped: {missing}")
 
     # ── 2. Assemble feature vector ─────────────────────────────────────────────
-    if FEATURES_COL in df.columns:
-        df = df.drop(FEATURES_COL)
+    if FEATURES_COL in train_df.columns:
+        train_df = train_df.drop(FEATURES_COL)
+    if FEATURES_COL in test_df.columns:
+        test_df = test_df.drop(FEATURES_COL)
 
     assembler    = VectorAssembler(inputCols=valid_features, outputCol=FEATURES_COL, handleInvalid="skip")
-    df_assembled = assembler.transform(df).select(FEATURES_COL, LABEL_COL)
+    train_df_assembled = assembler.transform(train_df).select(FEATURES_COL, LABEL_COL)
+    test_df_assembled = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
 
-    # ── 3. Train / test split ──────────────────────────────────────────────────
-    train_df, test_df = df_assembled.randomSplit([0.8, 0.2], seed=seed)
-    print(f"  Train: {train_df.count():,} rows | Test: {test_df.count():,} rows")
-
-    # ── 4. Balance classes ────────────────────────────────────────────────────
+    # ── 3. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
-    train_class_counts = train_df.groupBy(LABEL_COL).count().collect()
+    train_class_counts = train_df_assembled.groupBy(LABEL_COL).count().collect()
     train_counts = {int(row[LABEL_COL]): row["count"] for row in train_class_counts}
-    minority_n   = int(min(train_counts.values()))
-    majority_n   = int(max(train_counts.values()))
-    majority_lbl = max(train_counts, key=train_counts.get)
     minority_lbl = min(train_counts, key=train_counts.get)
-    fractions    = {
-        majority_lbl: minority_n / majority_n,
-        minority_lbl: 1.0,
-    }
-    print(f"  Train class counts - majority: ~{majority_n:,} | minority: ~{minority_n:,}")
-    print(f"  Downsampling majority to ~{minority_n:,} - balanced train: ~{minority_n * 2:,} rows")
-    balanced_train = train_df.stat.sampleBy(LABEL_COL, fractions, seed=seed)
+    majority_lbl = max(train_counts, key=train_counts.get)
+    minority_n   = train_counts[minority_lbl]
+    majority_n   = train_counts[majority_lbl]
+    
+    # Calculate the midpoint
+    target_n = int((minority_n + majority_n) / 2)
+    
+    print(f"  Train counts - majority: {majority_n:,} | minority: {minority_n:,}")
+    print(f"  Target count per class : {target_n:,} (Midpoint)")
+    
+    # Downsample majority
+    fraction_majority = target_n / majority_n
+    majority_df = train_df_assembled.filter(col(LABEL_COL) == majority_lbl) \
+        .sample(withReplacement=False, fraction=fraction_majority, seed=seed)
+        
+    # Upsample minority
+    fraction_minority = target_n / minority_n
+    minority_df = train_df_assembled.filter(col(LABEL_COL) == minority_lbl) \
+        .sample(withReplacement=True, fraction=fraction_minority, seed=seed)
+        
+    # Recombine into a single balanced training set
+    balanced_train = majority_df.unionAll(minority_df)
+    print(f"  Balanced train rows    : ~{target_n * 2:,}")
 
-    # ── 5. Build model + CrossValidator ───────────────────────────────────────
+    # ── 4. Build model + CrossValidator ───────────────────────────────────────
     registry  = MODEL_REGISTRY[model_name]
     estimator = registry["class"](**registry["fixed"])
 
@@ -245,7 +257,7 @@ def run_training(
         "missing_features":    missing,
     }
 
-    # ── 7. Save to disk immediately ───────────────────────────────────────────
+    # ── 6. Save to disk immediately ───────────────────────────────────────────
     try:
         _base = Path(__file__).parent
     except NameError:

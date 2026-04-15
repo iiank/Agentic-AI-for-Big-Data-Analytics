@@ -50,6 +50,8 @@ def _results(model_name, auc_pr, auc_roc, recall, precision, tp, fn, fp, tn):
 
 def _base_state(primary, secondary, iteration=0) -> AgentState:
     return {
+        "train_df": None,
+        "test_df": None,
         "iteration":             iteration,
         "feature_cols":          ["is_rush_hour", "Start_Time_Hour", "Visibility(mi)_bin"],
         "post_cleaning_profile": {
