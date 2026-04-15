@@ -53,7 +53,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
     "RandomForestClassifier": {
         "class":   RandomForestClassifier,
         "task":    "classification",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "maxBins": 128},
         "tunable": {
             "numTrees":            [100, 200, 300],
             "maxDepth":            [5, 10, 15],
@@ -64,7 +64,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
     "GBTClassifier": {
         "class":   GBTClassifier,
         "task":    "classification",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt"},
+        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
             "maxIter":             [20, 50],
             "maxDepth":            [5, 7],

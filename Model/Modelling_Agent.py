@@ -6,6 +6,7 @@
 import json
 import operator
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, TypedDict
 
@@ -329,38 +330,42 @@ if "spark" in locals():
     spark.stop()
     print("Existing Spark session stopped.")
 
-spark = SparkSession.builder \
+spark = (
+    SparkSession.builder
     .master("local[*]") \
     .appName("SparkTest") \
-    .config("spark.driver.host",                       "127.0.0.1") \
-    .config("spark.driver.bindAddress",                "127.0.0.1") \
-    .config("spark.driver.memory",                     driver_memory) \
-    .config("spark.sql.shuffle.partitions",            cores * 3) \
-    .config("spark.default.parallelism",               cores) \
-    .config("spark.sql.adaptive.enabled",              "true") \
-    .config("spark.pyspark.python",                    PYTHON_PATH) \
-    .config("spark.pyspark.driver.python",             PYTHON_PATH) \
-    .config("spark.python.use.daemon",                 "false") \
-    .config("spark.python.worker.faulthandler.enabled","true") \
-    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true") \
-    .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true") \
+    .config("spark.driver.host",                       "127.0.0.1")
+    .config("spark.driver.bindAddress",                "127.0.0.1")
+    .config("spark.pyspark.python",                    PYTHON_PATH)
+    .config("spark.pyspark.driver.python",             PYTHON_PATH)
+    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true")
+    .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true")
+    .config("spark.driver.memory",                     driver_memory)
+    .config("spark.sql.shuffle.partitions",            cores * 3)
+    .config("spark.default.parallelism",               cores)
+    .config("spark.sql.adaptive.enabled",              "true")
+    .config("spark.python.use.daemon",                 "false")
+    .config("spark.python.worker.faulthandler.enabled","true")
+    .config("spark.driver.extraJavaOptions", "-Dlog4j.logger.org.apache.spark.storage.BlockManagerStorageEndpoint=FATAL")
     .getOrCreate()
+)
 
 spark.sparkContext.setLogLevel("ERROR")
 
 PROJECT_ROOT = Path.cwd()
-TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset/engineered_df_train_pruned.parquet" # Update based on renamed file
-TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset/engineered_df_test_pruned.parquet" # Update based on renamed file
+TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset" / "engineered_df_train.parquet"
+TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset" / "engineered_df_test.parquet"
 
 if not TRAIN_PARQUET_PATH.exists() or not TEST_PARQUET_PATH.exists():
     raise FileNotFoundError(f"One or both engineered Parquet files not found.")
 
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
-print("Original Parquet:", TRAIN_PARQUET_PATH)
+print("Train Parquet:", TRAIN_PARQUET_PATH)
+print("Train Parquet:", TEST_PARQUET_PATH)
 
-train_df = spark.read.parquet(TRAIN_PARQUET_PATH)
-test_df = spark.read.parquet(TEST_PARQUET_PATH)
+train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
+test_df = spark.read.parquet(str(TEST_PARQUET_PATH))
 
 border("Loading FE parquet")
 print(f"Loaded Train Data: {train_df.count():,} rows")
@@ -368,10 +373,7 @@ print(f"Loaded Test Data:  {test_df.count():,} rows")
 
 # ── Load FE agent state ───────────────────────────────────────────────────────
 
-current_dir = Path(__file__).parent.resolve()
-project_root = current_dir.parent
-
-FE_STATE_PATH = project_root / "FE" / "state" / "fe_agent_state.json"
+FE_STATE_PATH = PROJECT_ROOT / "FE/state" / "fe_agent_state.json"
 if not FE_STATE_PATH.exists():
     raise FileNotFoundError(f"FE agent state not found at: {FE_STATE_PATH}")
 
