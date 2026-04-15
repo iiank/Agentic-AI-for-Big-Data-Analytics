@@ -349,18 +349,19 @@ spark = (
 spark.sparkContext.setLogLevel("ERROR")
 
 PROJECT_ROOT = Path.cwd()
-TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset/train_engineered.parquet" # Update based on renamed file
-TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset/test_engineered.parquet" # Update based on renamed file
+TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset" / "engineered_df_train.parquet"
+TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset" / "engineered_df_test.parquet"
 
 if not TRAIN_PARQUET_PATH.exists() or not TEST_PARQUET_PATH.exists():
     raise FileNotFoundError(f"One or both engineered Parquet files not found.")
 
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
-print("Original Parquet:", TRAIN_PARQUET_PATH)
+print("Train Parquet:", TRAIN_PARQUET_PATH)
+print("Train Parquet:", TEST_PARQUET_PATH)
 
-train_df = spark.read.parquet(TRAIN_PARQUET_PATH)
-test_df = spark.read.parquet(TEST_PARQUET_PATH)
+train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
+test_df = spark.read.parquet(str(TEST_PARQUET_PATH))
 
 border("Loading FE parquet")
 print(f"Loaded Train Data: {train_df.count():,} rows")
