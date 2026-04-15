@@ -6,6 +6,7 @@
 import json
 import operator
 import os
+from dotenv import load_dotenv
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, TypedDict
 
@@ -24,6 +25,7 @@ def border(s):
     print()
     print(f"{'='*20} {s} {'='*20}")
 
+
 # ── LLM Client ────────────────────────────────────────────────────────────────
 
 load_dotenv()
@@ -36,6 +38,8 @@ SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
 class AgentState(TypedDict):
     # Input — pass in from FE phase
+    train_parquet_path:              str
+    test_parquet_path:               str
     feature_cols:          List[str]
     post_cleaning_profile: Dict[str, Any]
     iteration:             int              # retry counter 
@@ -82,7 +86,7 @@ def build_model_selection_context(state: AgentState) -> Dict:
         "class_weight_ratio": profile.get("class_weight_ratio"),
         "majority_class_pct": majority_pct,
         "resampling_note":    "Majority class is downsampled to match minority (50:50) automatically — class imbalance is handled upstream. Focus model selection on architecture fit",
-        "spark_mode":         "local[*] — keep each model's grid to 4-6 combinations",
+        "spark_mode":         "local[*] — keenp each model's grid to 4-6 combinations",
         "available_models": {
             name: {
                 "task":           info["task"],
@@ -212,10 +216,6 @@ def training_node(state: AgentState) -> dict:
     train_df = spark.read.parquet(state["train_parquet_path"])
     test_df = spark.read.parquet(state["test_parquet_path"])
 
-    spark = SparkSession.getActiveSession()
-    train_df = spark.read.parquet(state["train_parquet_path"])
-    test_df = spark.read.parquet(state["test_parquet_path"])
-
     for role in ("primary", "secondary"):
         model_name = decision[f"{role}_model"]
         param_grid = decision.get(f"{role}_param_grid", {})
@@ -223,8 +223,6 @@ def training_node(state: AgentState) -> dict:
         print(f"\n[Modelling Agent] Node: training | {role}={model_name}")
 
         results = run_training(
-            train_df=train_df,
-            test_df=test_df,
             train_df=train_df,
             test_df=test_df,
             model_name=model_name,
@@ -458,6 +456,7 @@ checkpointer    = MemorySaver()
 modelling_agent = workflow.compile(checkpointer=checkpointer)
 print("Modelling agent graph compiled.")
 
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 # Load your engineered parquet and pass it in as df below.
 
@@ -500,7 +499,7 @@ spark = (
     .config("spark.driver.bindAddress",                "127.0.0.1")
     .config("spark.pyspark.python",                    PYTHON_PATH)
     .config("spark.pyspark.driver.python",             PYTHON_PATH)
-    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true -Dlog4j.logger.org.apache.spark.storage.BlockManagerStorageEndpoint=FATAL")
+    .config("spark.driver.extraJavaOptions",           "-Djava.net.preferIPv4Stack=true")
     .config("spark.executor.extraJavaOptions",         "-Djava.net.preferIPv4Stack=true")
     .config("spark.driver.memory",                     driver_memory)
     .config("spark.sql.shuffle.partitions",            cores * 3)
@@ -508,6 +507,7 @@ spark = (
     .config("spark.sql.adaptive.enabled",              "true")
     .config("spark.python.use.daemon",                 "false")
     .config("spark.python.worker.faulthandler.enabled","true")
+    .config("spark.driver.extraJavaOptions", "-Dlog4j.logger.org.apache.spark.storage.BlockManagerStorageEndpoint=FATAL")
     .getOrCreate()
 )
 
@@ -523,7 +523,7 @@ if not TRAIN_PARQUET_PATH.exists() or not TEST_PARQUET_PATH.exists():
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
 print("Train Parquet:", TRAIN_PARQUET_PATH)
-print("Test Parquet:", TEST_PARQUET_PATH)
+print("Train Parquet:", TEST_PARQUET_PATH)
 
 train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
 test_df = spark.read.parquet(str(TEST_PARQUET_PATH))
