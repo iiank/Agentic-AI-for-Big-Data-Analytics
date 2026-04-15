@@ -507,14 +507,17 @@ border("Identify directories")
 print("Project root:", PROJECT_ROOT)
 print("Original Parquet:", ENGINEERED_PARQUET_PATH)
 
-engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH)).limit(500)
+engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH)).limit(50)
 
 border("Loading FE parquet")
 print(f"Loaded: {engineered_df.count():,} rows")
 
 # ── Load FE agent state ───────────────────────────────────────────────────────
 
-FE_STATE_PATH = PROJECT_ROOT.parent / "FE" / "fe_agent_state.json"
+current_dir = Path(__file__).parent.resolve()
+project_root = current_dir.parent
+
+FE_STATE_PATH = project_root / "FE" / "fe_agent_state.json"
 if not FE_STATE_PATH.exists():
     raise FileNotFoundError(f"FE agent state not found at: {FE_STATE_PATH}")
 
