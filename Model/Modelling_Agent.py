@@ -38,8 +38,6 @@ SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
 class AgentState(TypedDict):
     # Input — pass in from FE phase
-    train_parquet_path:              str
-    test_parquet_path:               str
     feature_cols:          List[str]
     post_cleaning_profile: Dict[str, Any]
     iteration:             int              # retry counter 
@@ -212,10 +210,6 @@ def training_node(state: AgentState) -> dict:
     updates     = {}
     log_entries = []
 
-    spark = SparkSession.getActiveSession()
-    train_df = spark.read.parquet(state["train_parquet_path"])
-    test_df = spark.read.parquet(state["test_parquet_path"])
-
     for role in ("primary", "secondary"):
         model_name = decision[f"{role}_model"]
         param_grid = decision.get(f"{role}_param_grid", {})
@@ -356,10 +350,6 @@ def threshold_tuning_node(state: AgentState) -> dict:
 
     winner = state["evaluation_decision"]["winner"]
     print(f"  Tuning threshold for: {winner}")
-
-    from pyspark.sql import SparkSession
-    spark = SparkSession.getActiveSession()
-    test_df = spark.read.parquet(state["test_parquet_path"])
 
     tuning = run_threshold_tuning(
         test_df=test_df,
@@ -525,8 +515,8 @@ print("Project root:", PROJECT_ROOT)
 print("Train Parquet:", TRAIN_PARQUET_PATH)
 print("Train Parquet:", TEST_PARQUET_PATH)
 
-train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
-test_df = spark.read.parquet(str(TEST_PARQUET_PATH))
+train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH)).limit(5)
+test_df = spark.read.parquet(str(TEST_PARQUET_PATH)).limit(2)
 
 border("Loading FE parquet")
 print(f"Loaded Train Data: {train_df.count():,} rows")
@@ -725,7 +715,7 @@ while modelling_agent.get_state(config).next:
         model_name = final_state[f"{role}_results"].get("model_name")
         if model_name:
             run_full_evaluation(
-                test_df=test_df,
+                df=test_df,
                 model_name=model_name,
                 feature_cols=final_state["feature_cols"],
             )
