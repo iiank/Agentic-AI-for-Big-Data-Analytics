@@ -27,11 +27,6 @@ from pyspark.ml.regression import (
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import TomekLinks
-from imblearn.combine import SMOTETomek
-
-
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 LABEL_COL    = "Severity_Binary"
@@ -180,23 +175,36 @@ def run_training(
     train_df_assembled = assembler.transform(train_df).select(FEATURES_COL, LABEL_COL)
     test_df_assembled = assembler.transform(test_df).select(FEATURES_COL, LABEL_COL)
 
-    # ── 4. Balance classes ────────────────────────────────────────────────────
+    # ── 3. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
     train_class_counts = train_df_assembled.groupBy(LABEL_COL).count().collect()
     train_counts = {int(row[LABEL_COL]): row["count"] for row in train_class_counts}
-    minority_n   = int(min(train_counts.values()))
-    majority_n   = int(max(train_counts.values()))
-    majority_lbl = max(train_counts, key=train_counts.get)
     minority_lbl = min(train_counts, key=train_counts.get)
-    fractions    = {
-        majority_lbl: minority_n / majority_n,
-        minority_lbl: 1.0,
-    }
-    print(f"  Train class counts - majority: ~{majority_n:,} | minority: ~{minority_n:,}")
-    print(f"  Downsampling majority to ~{minority_n:,} - balanced train: ~{minority_n * 2:,} rows")
-    balanced_train = train_df_assembled.stat.sampleBy(LABEL_COL, fractions, seed=seed)
+    majority_lbl = max(train_counts, key=train_counts.get)
+    minority_n   = train_counts[minority_lbl]
+    majority_n   = train_counts[majority_lbl]
+    
+    # Calculate the midpoint
+    target_n = int((minority_n + majority_n) / 2)
+    
+    print(f"  Train counts - majority: {majority_n:,} | minority: {minority_n:,}")
+    print(f"  Target count per class : {target_n:,} (Midpoint)")
+    
+    # Downsample majority
+    fraction_majority = target_n / majority_n
+    majority_df = train_df_assembled.filter(col(LABEL_COL) == majority_lbl) \
+        .sample(withReplacement=False, fraction=fraction_majority, seed=seed)
+        
+    # Upsample minority
+    fraction_minority = target_n / minority_n
+    minority_df = train_df_assembled.filter(col(LABEL_COL) == minority_lbl) \
+        .sample(withReplacement=True, fraction=fraction_minority, seed=seed)
+        
+    # Recombine into a single balanced training set
+    balanced_train = majority_df.unionAll(minority_df)
+    print(f"  Balanced train rows    : ~{target_n * 2:,}")
 
-    # ── 5. Build model + CrossValidator ───────────────────────────────────────
+    # ── 4. Build model + CrossValidator ───────────────────────────────────────
     registry  = MODEL_REGISTRY[model_name]
     estimator = registry["class"](**registry["fixed"])
 
@@ -228,7 +236,7 @@ def run_training(
     cv_model   = cv.fit(balanced_train)
     best_model = cv_model.bestModel
 
-    # ── 6. Evaluate on held-out test set ──────────────────────────────────────
+    # ── 5. Evaluate on held-out test set ──────────────────────────────────────
     preds = cv_model.transform(test_df_assembled)
     auc   = round(evaluator.evaluate(preds), 4)
     print(f"  {model_name} Test AUC: {auc}")
@@ -241,7 +249,7 @@ def run_training(
         "missing_features":    missing,
     }
 
-    # ── 7. Save to disk immediately ───────────────────────────────────────────
+    # ── 6. Save to disk immediately ───────────────────────────────────────────
     try:
         _base = Path(__file__).parent
     except NameError:
