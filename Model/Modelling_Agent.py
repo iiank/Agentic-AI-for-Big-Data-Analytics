@@ -35,6 +35,8 @@ SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
 class AgentState(TypedDict):
     # Input — pass in from FE phase
+    train_df:              object
+    test_df:              object
     feature_cols:          List[str]
     post_cleaning_profile: Dict[str, Any]
     iteration:             int              # retry counter 
@@ -206,7 +208,8 @@ def training_node(state: AgentState) -> dict:
         print(f"\n[Modelling Agent] Node: training | {role}={model_name}")
 
         results = run_training(
-            df=engineered_df,
+            train_df=state["train_df"],
+            test_df=state["test_df"],
             model_name=model_name,
             param_grid_spec=param_grid,
             feature_cols=state["feature_cols"]
@@ -342,19 +345,22 @@ spark = SparkSession.builder \
 spark.sparkContext.setLogLevel("ERROR")
 
 PROJECT_ROOT = Path.cwd()
-ENGINEERED_PARQUET_PATH = PROJECT_ROOT / "dataset/engineered_df.parquet"
+TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset/train_engineered.parquet" # Update based on renamed file
+TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset/test_engineered.parquet" # Update based on renamed file
 
-if not ENGINEERED_PARQUET_PATH.exists():
-    raise FileNotFoundError(f"Engineered Parquet not found at: {ENGINEERED_PARQUET_PATH}")
+if not TRAIN_PARQUET_PATH.exists() or not TEST_PARQUET_PATH.exists():
+    raise FileNotFoundError(f"One or both engineered Parquet files not found.")
 
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
-print("Original Parquet:", ENGINEERED_PARQUET_PATH)
+print("Original Parquet:", TRAIN_PARQUET_PATH)
 
-engineered_df = spark.read.parquet(str(ENGINEERED_PARQUET_PATH))
+train_df = spark.read.parquet(TRAIN_PARQUET_PATH)
+test_df = spark.read.parquet(TEST_PARQUET_PATH)
 
 border("Loading FE parquet")
-print(f"Loaded: {engineered_df.count():,} rows")
+print(f"Loaded Train Data: {train_df.count():,} rows")
+print(f"Loaded Test Data:  {test_df.count():,} rows")
 
 # ── Load FE agent state ───────────────────────────────────────────────────────
 
@@ -392,7 +398,9 @@ print(f"Num rows       : {num_rows:,}")
 print(f"Class ratio    : {post_cleaning_profile['class_weight_ratio']} : 1")
 
 initial_state: AgentState = {
-    "iteration":             0,
+    "train_df":              train_df,
+    "test_df":               test_df,
+    "iteration":             1,
     "feature_cols":          feature_cols,
     "post_cleaning_profile": post_cleaning_profile,
     "model_selection":       {},

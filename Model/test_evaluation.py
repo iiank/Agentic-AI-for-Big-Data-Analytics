@@ -25,6 +25,8 @@ SAVED_RF_FI = Path(__file__).parent / "saved_models" / "RandomForestClassifier" 
 
 def _base_state(primary, secondary, iteration) -> AgentState:
     return {
+        "train_df": None,
+        "test_df": None,
         "iteration":             iteration,
         "feature_cols":          ["is_rush_hour", "Start_Time_Hour", "Visibility(mi)_bin"],
         "post_cleaning_profile": {
