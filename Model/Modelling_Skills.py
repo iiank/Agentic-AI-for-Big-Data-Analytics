@@ -29,6 +29,11 @@ from pyspark.ml.regression import (
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
+# Visual helper function (Only for printing purposes)
+def border(s):
+    print()
+    print(f"{'='*20} {s} {'='*20}")
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 LABEL_COL    = "high_severity"
@@ -68,8 +73,11 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
-            "maxIter":             [20],
-            "maxDepth":            [5]
+            "maxIter":             [20, 50, 100],
+            "maxDepth":            [5, 7, 10],
+            "stepSize":            [0.05, 0.1],
+            "subsamplingRate":     [0.7, 0.8],
+            "minInstancesPerNode": [5, 10]
         }
     },
  
@@ -230,13 +238,16 @@ def run_training(
         metricName="areaUnderROC",
     )
 
+    cores = int(os.cpu_count() * 0.8)
+    border(f"Using {cores} cores for training")
+
     cv = CrossValidator(
         estimator=estimator,
         estimatorParamMaps=param_grid,
         evaluator=evaluator,
         numFolds=3,
         seed=seed,
-        parallelism=os.cpu_count(),
+        parallelism=cores,
     )
 
     print(f"  Fitting CrossValidator for {model_name}...")
