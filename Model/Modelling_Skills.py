@@ -31,7 +31,7 @@ from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-LABEL_COL    = "Severity_Binary"
+LABEL_COL    = "high_severity"
 FEATURES_COL = "features"
 
 
