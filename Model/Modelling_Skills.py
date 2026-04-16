@@ -21,11 +21,6 @@ from pyspark.ml.classification import (
     GBTClassifier,
     LinearSVC,
 )
-from pyspark.ml.regression import (
-    LinearRegression,
-    RandomForestRegressor,
-    GBTRegressor,
-)
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
@@ -82,41 +77,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
             "maxIter":  [100, 200],
         }
     },
- 
-    # ── Regression ────────────────────────────────────────────────────────────
- 
-    "LinearRegression": {
-        "class":   LinearRegression,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "regParam":        [0.001, 0.01, 0.1, 1.0],
-            "elasticNetParam": [0.0, 0.5, 1.0],
-            "maxIter":         [100, 200],
-        }
-    },
- 
-    "RandomForestRegressor": {
-        "class":   RandomForestRegressor,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "numTrees":            [100, 200, 300],
-            "maxDepth":            [5, 10, 15],
-            "minInstancesPerNode": [10, 50, 100],
-        }
-    },
- 
-    "GBTRegressor": {
-        "class":   GBTRegressor,
-        "task":    "regression",
-        "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
-        "tunable": {
-            "maxIter":  [50, 100],
-            "maxDepth": [5, 10],
-            "stepSize": [0.05, 0.1],
-        }
-    },
+
  
 }
 

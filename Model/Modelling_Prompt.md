@@ -20,7 +20,6 @@ Select only from the classification models below. All are PySpark MLlib classifi
 - `GBTClassifier`
 - `LinearSVC`
 
-**Critical rule:** Never select a regression model for this task. The target is binary.
 
 ---
 
