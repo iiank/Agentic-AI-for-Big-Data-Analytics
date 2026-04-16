@@ -461,7 +461,7 @@ def main():
 
     # Summary table
     border("Summary")
-    header = f"{'Model':<50}  {'AUC-ROC':>8}  {'AUC-PRC':>8}  {'F1':>8}  {'Accuracy':>9}"
+    header = f"{'Model':<50}  {'AUC-ROC':>8}  {'AUC-PRC':>8}  {'F1':>8}  {'Precision':>10}  {'Recall':>8}  {'Accuracy':>9}"
     print(header)
     print("─" * len(header))
     for label, metrics in all_curve_results:
@@ -470,6 +470,8 @@ def main():
             f"{metrics['auc_roc']:>8}  "
             f"{metrics['auc_prc']:>8}  "
             f"{metrics['f1']:>8}  "
+            f"{metrics['weighted_precision']:>10}  "                     
+            f"{metrics['weighted_recall']:>8}  "      
             f"{metrics['accuracy']:>9}"
         )
 
