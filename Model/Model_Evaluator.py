@@ -126,6 +126,10 @@ def compute_metrics(predictions_df) -> dict:
       roc_curve (list of {fpr, tpr}),
       prc_curve (list of {recall, precision})
     """
+    # Cache predictions so the multiple evaluator passes don't recompute from scratch
+    predictions_df = predictions_df.cache()
+    predictions_df.count()  # materialise cache now
+
     # ── AUC-ROC and AUC-PRC (DataFrame API) ──────────────────────────────────
     be = BinaryClassificationEvaluator(
         labelCol=LABEL_COL,
@@ -144,17 +148,22 @@ def compute_metrics(predictions_df) -> dict:
     recall    = round(mce.evaluate(predictions_df, {mce.metricName: "weightedRecall"}),    4)
     accuracy  = round(mce.evaluate(predictions_df, {mce.metricName: "accuracy"}),          4)
 
-    # ── Confusion matrix (RDD API) ────────────────────────────────────────────
-    pred_label_rdd = (
+    # ── Confusion matrix (DataFrame groupBy — stays in JVM, no Python worker) ─
+    cm_rows = (
         predictions_df
-        .select(col("prediction").cast("double"), col(LABEL_COL).cast("double"))
-        .rdd.map(lambda r: (r[0], r[1]))
+        .select(
+            col(LABEL_COL).cast("int").alias("actual"),
+            col("prediction").cast("int").alias("predicted"),
+        )
+        .groupBy("actual", "predicted")
+        .count()
+        .collect()
     )
-    mc_metrics = MulticlassMetrics(pred_label_rdd)
-    cm = mc_metrics.confusionMatrix().toArray()
-    # Binary layout: rows = actual, cols = predicted  →  [[TN, FP], [FN, TP]]
-    tn, fp = int(cm[0][0]), int(cm[0][1])
-    fn, tp = int(cm[1][0]), int(cm[1][1])
+    cm = {(r["actual"], r["predicted"]): r["count"] for r in cm_rows}
+    tp = int(cm.get((1, 1), 0))
+    fp = int(cm.get((0, 1), 0))
+    tn = int(cm.get((0, 0), 0))
+    fn = int(cm.get((1, 0), 0))
 
     # ── ROC and PRC curves (RDD API) ──────────────────────────────────────────
     # Use probability[1] when available (GBT, LR, RF); fall back to rawPrediction[1] (SVC)
@@ -172,6 +181,8 @@ def compute_metrics(predictions_df) -> dict:
 
     roc_points = bc_metrics.roc().collect()          # list of (FPR, TPR)
     prc_points = bc_metrics.pr().collect()           # list of (recall, precision)
+
+    predictions_df.unpersist()
 
     roc_curve = [{"fpr": round(float(p[0]), 6), "tpr": round(float(p[1]), 6)} for p in roc_points]
     prc_curve = [{"recall": round(float(p[0]), 6), "precision": round(float(p[1]), 6)} for p in prc_points]
