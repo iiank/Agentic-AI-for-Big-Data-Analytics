@@ -1,0 +1,10 @@
+{
+  "model_name": "GBTClassifier",
+  "auc": 0.8464,
+  "best_params": {
+    "maxIter": 50,
+    "maxDepth": 7,
+    "stepSize": 0.1
+  },
+  "missing_features": []
+}

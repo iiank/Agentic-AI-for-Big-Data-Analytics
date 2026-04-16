@@ -1,0 +1,10 @@
+{
+  "model_name": "LogisticRegression",
+  "auc": 0.8048,
+  "best_params": {
+    "regParam": 0.01,
+    "elasticNetParam": 0.0,
+    "maxIter": 200
+  },
+  "missing_features": []
+}
