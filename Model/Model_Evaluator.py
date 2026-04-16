@@ -12,7 +12,7 @@ from pathlib import Path
 
 import psutil
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when
+from pyspark.sql.functions import col, when, lit
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.sql.functions import udf
@@ -32,7 +32,7 @@ CURVE_SAMPLE_FRACTION = 0.05   # ~50-70k rows from 1.4M — curves are approxima
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-LABEL_COL    = "Severity_Binary"
+LABEL_COL    = "high_severity"
 FEATURES_COL = "features"
 
 MODEL_CLASS_MAP = {
@@ -46,6 +46,7 @@ MODEL_CLASS_MAP = {
 MODEL_ROOTS = [
     Path(__file__).parent / "saved_models_8combins_0.8464",
     Path(__file__).parent / "saved_models_72combins",
+    # Path(__file__).parent / "saved_models_test1combi",
 ]
 
 PROJECT_ROOT    = Path(__file__).parent.parent
@@ -83,6 +84,42 @@ def load_feature_cols() -> list:
     return [c for c in fe_state["feature_columns"] if c != "high_severity"]
 
 
+def load_feature_cols_for_model(model_dir: Path) -> list:
+    """
+    Return the feature list that THIS model was actually trained on, in training order.
+
+    Priority (highest to lowest):
+      1. feature_cols.json  — explicitly saved training-order list (most reliable)
+      2. fe_agent_state.json — current FE run order, filtered to features in
+                               feature_importances.json when that file exists.
+
+    Note: feature_importances.json is sorted by importance (descending), NOT training
+    order. Using it directly scrambles GBT tree-split indices and breaks predictions.
+    """
+    # ── 1. Prefer explicitly saved training order ─────────────────────────────
+    fc_path = model_dir / "feature_cols.json"
+    if fc_path.exists():
+        with open(fc_path) as f:
+            return json.load(f)
+
+    # ── 2. Fall back to current fe_agent_state.json order ────────────────────
+    base_cols = load_feature_cols()
+    fi_path = model_dir / "feature_importances.json"
+    if fi_path.exists():
+        with open(fi_path) as f:
+            fi = json.load(f)
+        fi_keys = set(fi.keys())
+        filtered = [c for c in base_cols if c in fi_keys]
+        if len(filtered) != len(fi_keys):
+            extra = fi_keys - set(base_cols)
+            if extra:
+                print(f"  [warn] {len(extra)} feature(s) in feature_importances.json not in "
+                      f"fe_agent_state.json (will be zero-padded): {extra}")
+                filtered += sorted(extra)
+        return filtered
+    return base_cols
+
+
 def assemble_test_df(test_df, feature_cols):
     """
     Apply the same assembly pipeline used during training:
@@ -96,14 +133,19 @@ def assemble_test_df(test_df, feature_cols):
     if FEATURES_COL in test_df.columns:
         test_df = test_df.drop(FEATURES_COL)
 
-    actual_cols    = set(test_df.columns)
-    valid_features = [c for c in feature_cols if c in actual_cols]
-    missing        = [c for c in feature_cols if c not in actual_cols]
+    actual_cols = set(test_df.columns)
+    missing     = [c for c in feature_cols if c not in actual_cols]
     if missing:
-        print(f"  [warn] Features not found in test data (skipped): {missing}")
+        print(f"  [warn] Features not found in test data (padding with zeros): {missing}")
+        for m in missing:
+            # Pad missing scalar features with 0.0 so the assembled vector
+            # has the same dimensionality as when the model was trained.
+            # OHE/vector columns are stored in the parquet and won't appear here;
+            # only scalar features can go missing (e.g. after pruning).
+            test_df = test_df.withColumn(m, lit(0.0))
 
     assembler = VectorAssembler(
-        inputCols=valid_features,
+        inputCols=feature_cols,   # use full list — missing cols are now zero-filled
         outputCol=FEATURES_COL,
         handleInvalid="skip",
     )
@@ -350,18 +392,9 @@ def main():
     spark = build_spark()
     spark.sparkContext.setLogLevel("ERROR")
 
-    border("Loading feature columns from FE state")
-    feature_cols = load_feature_cols()
-    print(f"  {len(feature_cols)} feature columns loaded (high_severity excluded)")
-
     border("Loading test data")
     test_df = spark.read.parquet(str(TEST_PARQUET))
     print(f"  Test rows : {test_df.count():,}")
-
-    border("Assembling test features")
-    assembled_test = assemble_test_df(test_df, feature_cols)
-    assembled_test.cache()
-    print(f"  Assembled and cached.")
 
     all_curve_results = []   # [(label, metrics), ...] for combined plot
 
@@ -389,6 +422,15 @@ def main():
                 print(f"  [error] Could not load model: {e}")
                 continue
 
+            # Load the feature list THIS model was trained on (from feature_importances.json
+            # if present, else fall back to current fe_agent_state.json).
+            model_feature_cols = load_feature_cols_for_model(model_dir)
+            print(f"  Feature set : {len(model_feature_cols)} cols "
+                  f"({'from feature_importances.json' if (model_dir / 'feature_importances.json').exists() else 'from fe_agent_state.json'})")
+
+            # Assemble test data using this model's specific feature set
+            assembled_test = assemble_test_df(test_df, model_feature_cols)
+
             # Load saved results.json for best_params display
             results_json = {}
             results_file = model_dir / "results.json"
@@ -397,15 +439,20 @@ def main():
                     results_json = json.load(f)
 
             print(f"  Model loaded ({spark_class.split('.')[-1]}). Running predictions...")
-            predictions = model.transform(assembled_test)
+            try:
+                predictions = model.transform(assembled_test)
 
-            print("  Computing metrics...")
-            metrics = compute_metrics(predictions)
+                print("  Computing metrics...")
+                metrics = compute_metrics(predictions)
 
-            print_report(label, spark_class, results_json, metrics)
-            save_curves(label, metrics)
+                print_report(label, spark_class, results_json, metrics)
+                save_curves(label, metrics)
 
-            all_curve_results.append((f"{root.name}/{model_dir.name}", metrics))
+                all_curve_results.append((f"{root.name}/{model_dir.name}", metrics))
+            except Exception as e:
+                # Most likely cause: model was trained on a different feature set
+                # (vector size mismatch). Skip and continue to the next model.
+                print(f"  [error] Evaluation failed — model may be stale (trained on different features): {e}")
 
     # Combined comparison plot
     if all_curve_results:
@@ -426,7 +473,6 @@ def main():
             f"{metrics['accuracy']:>9}"
         )
 
-    assembled_test.unpersist()
     spark.stop()
     border("Done")
 
