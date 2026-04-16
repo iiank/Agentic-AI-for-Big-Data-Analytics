@@ -1,0 +1,18 @@
+{
+  "model_name": "LogisticRegression",
+  "auc": 0.8035,
+  "best_params": {
+    "regParam": 0.01,
+    "elasticNetParam": 0.0,
+    "maxIter": 50
+  },
+  "missing_features": [
+    "is_country_road",
+    "is_expressway",
+    "is_primary_road",
+    "is_freezing_precip",
+    "is_stormy",
+    "is_dry",
+    "Wind_Speed(mph)_multiply_Visibility(mi)"
+  ]
+}

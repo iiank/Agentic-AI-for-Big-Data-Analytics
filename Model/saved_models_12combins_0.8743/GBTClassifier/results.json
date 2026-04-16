@@ -1,0 +1,18 @@
+{
+  "model_name": "GBTClassifier",
+  "auc": 0.8743,
+  "best_params": {
+    "maxIter": 100,
+    "maxDepth": 10,
+    "stepSize": 0.1
+  },
+  "missing_features": [
+    "is_country_road",
+    "is_expressway",
+    "is_primary_road",
+    "is_freezing_precip",
+    "is_stormy",
+    "is_dry",
+    "Wind_Speed(mph)_multiply_Visibility(mi)"
+  ]
+}

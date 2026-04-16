@@ -1,4 +1,4 @@
-# Modelling_Skills.py
+# ValidateCleaning_Skills.py
 # Pure PySpark MLlib execution layer for the Validate Cleaning agent.
 
 import os
@@ -422,21 +422,26 @@ def _generate_quality_summary(profile):
 
     # Check for critical nulls
     for c, data in profile["missing_values"].items():
-        if data["severity"] == "critical":
+        if (data["severity"] == "critical") or (data["severity"] == "high"):
             critical_issues.append(f"Critical Nulls: {c}")
+            
+    # Check for near zero variance
+    for c, data in profile["categorical_analysis"].items():
+        if data.get("near_zero_variance"):
+            critical_issues.append(f"Near Zero Variance: {c}")
 
-    # Determine score
-    if not critical_issues and len(warnings) < 5:
-      score = "good"
-    elif len(critical_issues) <= 3 or len(warnings) <= 10:
-      score = "moderate"
+    num_crit = len(critical_issues)
+    
+    if num_crit == 0:
+        score = "good"
+    elif num_crit <= 2:
+        score = "moderate"
     else:
-      score = "poor"
+        score = "poor"
 
     return {
-        "total_issues": len(critical_issues) + len(warnings),
+        "total_issues": num_crit,
         "critical_issues": critical_issues,
-        "warnings": warnings,
         "overall_quality_score": score
     }
 
