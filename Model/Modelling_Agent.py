@@ -353,8 +353,8 @@ print("Project root:", PROJECT_ROOT)
 print("Train Parquet:", TRAIN_PARQUET_PATH)
 print("Test Parquet:", TEST_PARQUET_PATH)
 
-train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH))
-test_df = spark.read.parquet(str(TEST_PARQUET_PATH))
+train_df = spark.read.parquet(str(TRAIN_PARQUET_PATH)).limit(5)
+test_df = spark.read.parquet(str(TEST_PARQUET_PATH)).limit(2)
 
 border("Loading FE parquet")
 print(f"Loaded Train Data: {train_df.count():,} rows")

@@ -63,8 +63,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
-            "maxIter":             [20],
-            "maxDepth":            [5]
+            "maxIter":             [10],
+            "maxDepth":            [2]
         }
     },
  
