@@ -1,0 +1,14 @@
+findspark==2.0.1
+imbalanced-learn==0.14.1
+ipython==8.31.0
+langgraph==1.0.4
+matplotlib==3.9.2
+numpy==2.2.6
+openai==2.30.0
+pandas==3.0.1
+psutil==6.1.1
+pydantic==2.12.5
+pyspark==4.1.1
+python-dotenv==1.2.2
+seaborn==0.13.2
+scikit-learn==1.6.1
