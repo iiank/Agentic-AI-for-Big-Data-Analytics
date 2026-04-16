@@ -27,7 +27,7 @@ from pyspark.ml.evaluation import (
     BinaryClassificationEvaluator,
     MulticlassClassificationEvaluator,
 )
-from pyspark.mllib.evaluation import BinaryClassificationMetrics, MulticlassMetrics
+CURVE_SAMPLE_FRACTION = 0.05   # ~50-70k rows from 1.4M — curves are approximate, AUC values are exact
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -165,27 +165,37 @@ def compute_metrics(predictions_df) -> dict:
     tn = int(cm.get((0, 0), 0))
     fn = int(cm.get((1, 0), 0))
 
-    # ── ROC and PRC curves (RDD API) ──────────────────────────────────────────
-    # Use probability[1] when available (GBT, LR, RF); fall back to rawPrediction[1] (SVC)
+    # ── ROC and PRC curves (driver-side, sampled) ─────────────────────────────
+    # Collect a small sample to the driver and compute curves with sklearn.
+    # Avoids pushing 1.4M rows through the Python RDD worker (causes OOM/crash).
+    # AUC values above are already exact (computed fully in JVM); curves are approximate.
     if "probability" in predictions_df.columns:
-        scored = predictions_df.withColumn("_score", vector_to_array(col("probability"))[1])
+        score_col = vector_to_array(col("probability"))[1]
     else:
-        scored = predictions_df.withColumn("_score", vector_to_array(col("rawPrediction"))[1])
+        score_col = vector_to_array(col("rawPrediction"))[1]
 
-    score_label_rdd = (
-        scored
-        .select(col("_score").cast("double"), col(LABEL_COL).cast("double"))
-        .rdd.map(lambda r: (r[0], r[1]))
+    sample_pd = (
+        predictions_df
+        .select(score_col.cast("double").alias("_score"), col(LABEL_COL).cast("double"))
+        .sample(fraction=CURVE_SAMPLE_FRACTION, seed=42)
+        .toPandas()
     )
-    bc_metrics = BinaryClassificationMetrics(score_label_rdd)
-
-    roc_points = bc_metrics.roc().collect()          # list of (FPR, TPR)
-    prc_points = bc_metrics.pr().collect()           # list of (recall, precision)
+    scores = sample_pd["_score"].values
+    labels = sample_pd[LABEL_COL].values
 
     predictions_df.unpersist()
 
-    roc_curve = [{"fpr": round(float(p[0]), 6), "tpr": round(float(p[1]), 6)} for p in roc_points]
-    prc_curve = [{"recall": round(float(p[0]), 6), "precision": round(float(p[1]), 6)} for p in prc_points]
+    try:
+        from sklearn.metrics import roc_curve as sk_roc, precision_recall_curve as sk_prc
+        fpr_arr, tpr_arr, _   = sk_roc(labels, scores)
+        pre_arr, rec_arr, _   = sk_prc(labels, scores)
+        roc_curve = [{"fpr": round(float(f), 6), "tpr": round(float(t), 6)}
+                     for f, t in zip(fpr_arr, tpr_arr)]
+        prc_curve = [{"recall": round(float(r), 6), "precision": round(float(p), 6)}
+                     for p, r in zip(pre_arr, rec_arr)]
+    except ImportError:
+        print("  [warn] sklearn not installed — curve points skipped (AUC values are still exact)")
+        roc_curve, prc_curve = [], []
 
     return {
         "auc_roc":          auc_roc,
