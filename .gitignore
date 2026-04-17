@@ -222,6 +222,7 @@ __marimo__/
 dataset/
 Model/saved_models/
 models/
+Model/evaluation_plots/
 
 # Data files
 *.parquet

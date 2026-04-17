@@ -44,10 +44,7 @@ MODEL_CLASS_MAP = {
 
 # Saved model root dirs to evaluate — add more paths here as needed
 MODEL_ROOTS = [
-    # Path(__file__).parent / "saved_models_8combins_0.8464",
-    # Path(__file__).parent / "saved_models_72combins",
-    # Path(__file__).parent / "saved_models_test1combi",
-    Path(__file__).parent / "model_72combi_complete",
+    Path(__file__).parent / "model_72combi_2m_complete",
 ]
 
 PROJECT_ROOT    = Path(__file__).parent.parent

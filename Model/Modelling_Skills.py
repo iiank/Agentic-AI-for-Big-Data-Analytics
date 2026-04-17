@@ -4,25 +4,21 @@
 
 import os
 import json
-import numpy as np
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 from pyspark.sql import DataFrame
-from pyspark.ml.linalg import Vectors, VectorUDT
-from pyspark.sql.functions import udf
-from pyspark.sql.functions import col, when
-from pyspark.sql.types import StructType, StructField, IntegerType
+from pyspark.sql.functions import col, when, udf
 from pyspark.ml.linalg import Vectors, VectorUDT
 from pyspark.ml.feature import VectorAssembler
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 from pyspark.ml.classification import (
     LogisticRegression,
     RandomForestClassifier,
     GBTClassifier,
     LinearSVC,
 )
-from pyspark.ml.evaluation import BinaryClassificationEvaluator
-from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
 # Visual helper function (Only for printing purposes)
 def border(s):
@@ -33,7 +29,6 @@ def border(s):
 
 LABEL_COL    = "high_severity"
 FEATURES_COL = "features"
-
 
 # ── Model Registry ────────────────────────────────────────────────────────────
 
@@ -85,10 +80,7 @@ MODEL_REGISTRY: Dict[str, Dict] = {
             "maxIter":  [100, 200],
         }
     },
-
- 
 }
-
 
 # ── Training Function ─────────────────────────────────────────────────────────
 
@@ -159,6 +151,7 @@ def run_training(
     test_df_assembled = test_df_assembled.withColumn(
         FEATURES_COL, to_dense_udf(col(FEATURES_COL))
     )
+
     # ── 3. Balance classes ────────────────────────────────────────────────────
     print("  Balancing classes...")
     train_class_counts = train_df_assembled.groupBy(LABEL_COL).count().collect()
@@ -245,7 +238,6 @@ def run_training(
  
     return results
 
-
 # ── Private Helpers ───────────────────────────────────────────────────────────  
 
 def _extract_best_params(best_model, param_grid_spec: Dict) -> Dict:
@@ -256,7 +248,6 @@ def _extract_best_params(best_model, param_grid_spec: Dict) -> Dict:
             val = getattr(best_model, getter)
             best_params[param_name] = val() if callable(val) else val
     return best_params
-
 
 def _extract_feature_importances(best_model, feature_cols: List[str]) -> Optional[Dict]:
     if not hasattr(best_model, "featureImportances"):
