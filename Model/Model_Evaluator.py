@@ -44,11 +44,15 @@ MODEL_CLASS_MAP = {
 
 # Saved model root dirs to evaluate — add more paths here as needed
 MODEL_ROOTS = [
-    Path(__file__).parent / "model_72combi_2m_complete",
+    Path(__file__).parent / "saved_models",
 ]
 
 PROJECT_ROOT    = Path(__file__).parent.parent
 TEST_PARQUET    = PROJECT_ROOT / "dataset" / "engineered_df_test_pruned.parquet"
+if not TEST_PARQUET.exists():
+    TEST_PARQUET = PROJECT_ROOT / "dataset" / "engineered_df_test.parquet"
+    print("  [info] Pruned test parquet not found, falling back to engineered_df_test.parquet")
+
 FE_STATE_PATH   = PROJECT_ROOT / "FE" / "state" / "fe_agent_state.json"
 PLOTS_DIR       = Path(__file__).parent / "evaluation_plots"
 

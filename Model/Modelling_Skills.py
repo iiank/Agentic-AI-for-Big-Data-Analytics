@@ -41,8 +41,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
         "tunable": {
-            "regParam":        [0.001, 0.01],
-            "elasticNetParam": [0.0, 0.5],
+            "regParam":        [0.001],
+            "elasticNetParam": [0.0],
             "maxIter":         [100],
         }
     },
@@ -52,9 +52,9 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "maxBins": 128},
         "tunable": {
-            "numTrees":            [100, 200, 300],
-            "maxDepth":            [5, 10, 15],
-            "minInstancesPerNode": [10, 50, 100],
+            "numTrees":            [100],
+            "maxDepth":            [5],
+            "minInstancesPerNode": [10],
         }
     },
  
@@ -63,11 +63,11 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL, "featureSubsetStrategy": "sqrt", "maxBins": 128},
         "tunable": {
-            "maxIter":             [20, 50, 100],
-            "maxDepth":            [5, 7, 10],
-            "stepSize":            [0.05, 0.1],
-            "subsamplingRate":     [0.7, 0.8],
-            "minInstancesPerNode": [5, 10]
+            "maxIter":             [20],
+            "maxDepth":            [5],
+            "stepSize":            [0.1],
+            "subsamplingRate":     [1.0],
+            "minInstancesPerNode": [1]
         }
     },
  
@@ -76,8 +76,8 @@ MODEL_REGISTRY: Dict[str, Dict] = {
         "task":    "classification",
         "fixed":   {"labelCol": LABEL_COL, "featuresCol": FEATURES_COL},
         "tunable": {
-            "regParam": [0.001, 0.01, 0.1, 1.0],
-            "maxIter":  [100, 200],
+            "regParam": [0.001],
+            "maxIter":  [100],
         }
     },
 }
