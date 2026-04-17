@@ -1,4 +1,4 @@
-# BT4221_US_Accidents
+# BT4221 Project: Understanding US Traffic Accidents (2016-2023)
 
 ## Commands to set up connection between Local and Remote Git Repository
 ```sh
@@ -37,22 +37,22 @@ git push origin main                                   # Push to remote git repo
     </tr>
     <tr>
         <td>Python</td>
-        <td>3.11.* (3.13.9 & 3.14.3 seems to have compatibility issues)</td>
+        <td>3.11.15 (Strongly Preferred)</td>
     </tr>
     <tr>
         <td>Java</td>
         <td><a href="https://jdk.java.net//java-se-ri/17-MR1">jdk17.0.0.1</a></td>
     </tr>
     <tr>
-        <td>Hadoop</td>
+        <td>Hadoop (Windows)</td>
         <td><a href="https://hadoop.apache.org/release/3.3.6.html">hadoop-3.3.6.tar.gz</a></td>
     </tr>
     <tr>
-        <td>Hadoop bin folder fix</td>
+        <td>Hadoop bin folder fix (Windows)</td>
         <td><a href="https://github.com/cdarlint/winutils/tree/master/hadoop-3.3.6">hadoop-3.3.6 bin fix</a></td>
     </tr>
     <tr>
-        <td>WinRAR</td>
+        <td>WinRAR (Windows)</td>
         <td><a href="https://www.win-rar.com/postdownload.html?&L=0">WinRAR</a></td>
     </tr>
 </table>
@@ -61,7 +61,7 @@ git push origin main                                   # Push to remote git repo
 1. Load WinRAR with **administrator rights**, and extract `hadoop-3.3.6.tar.gz` into a folder
 2. After extraction, replace the existing bin folder with the one from `Hadoop bin folder fix`
 
-### Edit Environment Variables
+#### Edit Environment Variables
 Under the Windows search bar, search for "View advanced system settings". Under "Environment Variables", create 2 new variables under "System Variables": `JAVA_HOME` and `HADOOP_HOME`
 
 `JAVA_HOME`  
@@ -78,47 +78,123 @@ Variable value: path/to/hadoop/3.3.6 (Example: C:\hadoop\hadoop-3.3.6)
 
 Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 
-## Problem Statement and Dataset
-Traffic congestion and road safety are critical issues for urban planning and emergency response management. This project leverages a countrywide dataset of US traffic accidents, spanning 49 states and collected via real-time traffic APIs from 2016 to 2023. The primary objective is to determine whether the severity of an accident, gauged by its impact on traffic flow, can be accurately predicted using real-time environmental, temporal, and spatial conditions.
+## Instructions
 
-The original dataset “US Accidents (2016 - 2023)” dataset is sourced from Kaggle.  It contains data collected from February 2016 to March 2023 on all 49 states in the United States of America. The dataset was obtained using multiple APIs on streaming traffic incident data from various entities, such as state departments of transportation, law enforcement agencies, traffic cameras, and traffic sensors within road networks. 
+### Setup
+1. Download the project into your preferred directory
+2. Confirm the outline of the project shown below:
+    ```bash
+    C:.
+    │   .env
+    │   README.md
+    │
+    ├───dataset
+    │   │   US_Accidents_March23.csv
+    │   │
+    │   ├───engineered_df_test.parquet
+    │   ├───engineered_df_test_pruned.parquet
+    │   ├───engineered_df_train.parquet
+    │   ├───engineered_df_train_pruned.parquet
+    │   ├───test_parquet
+    │   ├───train_parquet
+    │   └───US_Accidents_March23_parquet
+    ├───EDA
+    │       EDA_Model.ipynb
+    │       EDA_Visuals.ipynb
+    │       Visualisations.ipynb
+    │
+    ├───FE
+    │   │   FE_Agent_v4.ipynb
+    │   │   ValidateCleaning_Reject.ipynb
+    │   │   ValidateCleaning_Skills.py
+    │   │
+    │   ├───skills
+    │   │   │   skill_bin_numeric.md
+    │   │   │   skill_compute_interaction_features.md
+    │   │   │   skill_drop_columns.md
+    │   │   │   skill_encode_categorical.md
+    │   │   │   skill_extract_time_features.md
+    │   │   │   skill_scale_numeric.md
+    │   │   │   skill_semantic_boolean_expansion.md
+    │   │   │
+    │   │   └───profile-dataset
+    │   │           SKILL.md
+    │   │
+    │   └───state
+    │           fe_agent_state.json
+    │
+    └───Model
+            Modelling_Agent.py
+            Modelling_Prompt.md
+            Modelling_Skills.py
+            Model_Evaluator.py
+            requirements.txt
+            test_evaluation.py
+    ```
 
-The target variable is "Severity", recorded on a scale from 1 to 4 of increasing traffic disruption. 
+### 1. Data Cleaning and Preparation (Compulsory)
+#### Setup
+1. Under the __dataset/__ folder, remove all Parquet files. Do not remove the original dataset __US_Accidents_March23.csv__
+2. Under the __FE/__ folder, remove the __state/__ folder containing __fe_agent_state.json__
 
-## Overall Agent, Langgraph, and Agent Skills Integration
-...
+#### Execution
+1. Under the __dataset/__ folder, run all cells in __EDA_Model.ipynb__
+2. 2 new Parquet files will be generated in the __dataset/__ folder:
+    - train.parquet
+    - test.parquet
 
-## Cleaning & Preprocessing
-Primary data cleaning and preprocessing on the 4 severity classes from the raw `US Accidents (2016 - 2023)` was conducted in `EDA/EDA.ipynb`. 
+### Validate Cleaning (Optional)
 
-...
+### 2. Feature Engineering Agent
+#### Setup
+1. Ensure that the __datatset/__ folder consists of:
+    - train.parquet
+    - test.parquet
 
-## EDA 
-Exploratory Data Analysis on the 4 severity classes was also conducted in `EDA/EDA.ipynb`.
+#### Execution
+1. After executing __EDA_Model.ipynb__, exit the __dataset/__ folder and under the __FE/__ folder, run all cells in __FE_Agent_v4.ipynb__
+2. A __state__ folder will be generated in the __FE/__ folder, containing __fe_agent_state.json__
+3. 2 new Parquet files will be generated under the __dataset/__ folder:
+    - engineered_df_train.parquet
+    - engineered_df_test.parquet
+4. Another 2 new Parquet files may be generated under the __dataset/__ folder if the Feature Engineering Agent decides to prune sparse or noisy features:
+    - engineered_df_train_pruned.parquet
+    - engineered_df_test_pruned.parquet
 
-...
+### 3. Model & Performance Agent
+#### Setup
+1. Ensure that the __datatset/__ folder consists of:
+    - engineered_df_train.parquet __OR__ engineered_df_train_pruned.parquet
+    - engineered_df_test.parquet __OR__ engineered_df_test_pruned.parquet
 
-To manage severe class imbalance and focus on identifying factors that lead to significant traffic disruption, the target is reclassified into a binary variable for EDA in `EDA/post_clean_EDA.ipynb`:
+#### Execution
+1. After executing __FE_Agent_v4.ipynb__, exit the __FE/__ folder and under the __Model/__ folder, run __Modelling_Agent.py__
+2. User will be required to enter inputs:
+    ```
+    Approve? (y to proceed, n to override):
+    Override primary model (or press Enter to keep):
+    Override secondary model (or press Enter to keep):
+    ```
+3. Once the model has been trained, a new folder __saved_models/__ will be generated under the __Model/__ folder
+4. The __saved_models/__ folder will contain 2 model folders the user has selected OR left selected by default, in each model folder they contain:
+    - The respective model's metadata
+    - feature_importances.json
+    - results.json
 
-*   Low Severity (Class 0): Original levels 1 and 2, representing accidents with minor to moderate impact on traffic flow.
-*   High Severity (Class 1): Original levels 3 and 4, representing accidents with significant impact on traffic flow.
+### 4. Evaluation
+#### Setup
+1. Ensure that the __Model/__ folder consists of:
+    - 2 model folders containing:
+        - The respective model's metadata
+        - feature_importances.json
+        - results.json
 
-## Validate Cleaning Agent
-
-...
-
-## Feature Engineering Agent
-
-...
-
-## Model Agent
-
-...
-
-## Model Evaluation
-
-...
-
-## Results Discussion & Insights
-
-...
+#### Execution:
+1. After executing __Modelling_Agent.py__, run __Model_Evaluator.py__
+2. A new folder __evaluation_plots/__ will be generated
+3. The __evaluation_plots/__ folder will contain:
+    - curves_comparison.png
+    - saved_models_primary_model_prc_curve.json
+    - saved_models_primary_model_roc_curve.json
+    - saved_models_secondary_model_prc_curve.json
+    - saved_models_secondary_model_roc_curve.json
