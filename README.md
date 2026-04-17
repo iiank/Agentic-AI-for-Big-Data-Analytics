@@ -138,12 +138,12 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 2. Under the __FE/__ folder, remove the __state/__ folder containing __fe_agent_state.json__
 
 #### Execution
-1. Under the __dataset/__ folder, run all cells in __EDA_Model.ipynb__
+1. Under the __dataset/__ folder, run all cells in __1EDA_Model.ipynb__
 2. 2 new Parquet files will be generated in the __dataset/__ folder:
     - train.parquet
     - test.parquet
 
-### 1.1 Validate Cleaning (Optional)
+### Identify Dataset Quality (Optional)
 #### Setup
 1. Ensure that the __datatset/__ folder consists of:
     - train.parquet
@@ -153,14 +153,14 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 1. Under the __FE/__ folder, run __ValidateCleaning_Reject.ipynb__ with the 2 Parquet files in the __dataset/__ folder
 2. Identifies quality of dataset prior to Feature Engineering Agent
 
-### 2. Feature Engineering Agent (Compulsory)
+### 2. Validate Cleaning Agent and Feature Engineering Agent (Compulsory)
 #### Setup
 1. Ensure that the __datatset/__ folder consists of:
     - train.parquet
     - test.parquet
 
 #### Execution
-1. After executing __EDA_Model.ipynb__, exit the __dataset/__ folder and under the __FE/__ folder, run all cells in __FE_Agent_v4.ipynb__
+1. After executing __1EDA_Model.ipynb__, exit the __dataset/__ folder and under the __FE/__ folder, run all cells in __2VC_FE_Agent.ipynb__
 2. A __state__ folder will be generated in the __FE/__ folder, containing __fe_agent_state.json__
 3. 2 new Parquet files will be generated under the __dataset/__ folder:
     - engineered_df_train.parquet
@@ -176,7 +176,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     - engineered_df_test.parquet __OR__ engineered_df_test_pruned.parquet
 
 #### Execution
-1. After executing __FE_Agent_v4.ipynb__, exit the __FE/__ folder and under the __Model/__ folder, run __Modelling_Agent.py__
+1. After executing __2VC_FE_Agent.ipynb__, exit the __FE/__ folder and under the __Model/__ folder, run __3Modelling_Agent.py__
 2. User will be required to enter inputs:
     ```
     Approve? (y to proceed, n to override):
@@ -198,7 +198,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
         - results.json
 
 #### Execution:
-1. After executing __Modelling_Agent.py__, run __Model_Evaluator.py__
+1. After executing __3Modelling_Agent.py__, run __4Model_Evaluator.py__
 2. A new folder __evaluation_plots/__ will be generated
 3. The __evaluation_plots/__ folder will contain:
     - curves_comparison.png
