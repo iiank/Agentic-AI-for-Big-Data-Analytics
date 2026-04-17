@@ -3,9 +3,9 @@
 # Defines AgentState, LangGraph nodes, LLM calls, and graph wiring.
 # Imports PySpark execution from Modelling_Skills.py.
 
+import os
 import json
 import operator
-import os
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, TypedDict
 
@@ -301,7 +301,7 @@ driver_memory_gb = int(total_ram_gb * 0.7)
 driver_memory = f"{driver_memory_gb}g"
 
 border("Retrieve local computer specifications")
-print(f"Cores: {cores}")
+print(f"Logical Cores: {cores}")
 print(f"Driver Memory: {driver_memory}")
 
 PYTHON_PATH = sys.executable
@@ -345,8 +345,16 @@ PROJECT_ROOT = Path.cwd()
 TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset" / "engineered_df_train_pruned.parquet"
 TEST_PARQUET_PATH  = PROJECT_ROOT / "dataset" / "engineered_df_test_pruned.parquet"
 
+if not TRAIN_PARQUET_PATH.exists():
+    TRAIN_PARQUET_PATH = PROJECT_ROOT / "dataset" / "engineered_df_train.parquet"
+    print("  Pruned train parquet not found, falling back to engineered_df_train.parquet")
+
+if not TEST_PARQUET_PATH.exists():
+    TEST_PARQUET_PATH = PROJECT_ROOT / "dataset" / "engineered_df_test.parquet"
+    print("  Pruned test parquet not found, falling back to engineered_df_test.parquet")
+
 if not TRAIN_PARQUET_PATH.exists() or not TEST_PARQUET_PATH.exists():
-    raise FileNotFoundError(f"One or both engineered Parquet files not found.")
+    raise FileNotFoundError("One or both engineered Parquet files not found.")
 
 border("Identify directories")
 print("Project root:", PROJECT_ROOT)
