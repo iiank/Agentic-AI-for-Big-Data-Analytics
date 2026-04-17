@@ -143,9 +143,17 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     - train.parquet
     - test.parquet
 
-### Validate Cleaning (Optional)
+### 1.1 Validate Cleaning (Optional)
+#### Setup
+1. Ensure that the __datatset/__ folder consists of:
+    - train.parquet
+    - test.parquet
 
-### 2. Feature Engineering Agent
+#### Execution
+1. Under the __FE/__ folder, run __ValidateCleaning_Reject.ipynb__ with the 2 Parquet files in the __dataset/__ folder
+2. Identifies quality of dataset prior to Feature Engineering Agent
+
+### 2. Feature Engineering Agent (Compulsory)
 #### Setup
 1. Ensure that the __datatset/__ folder consists of:
     - train.parquet
@@ -161,7 +169,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     - engineered_df_train_pruned.parquet
     - engineered_df_test_pruned.parquet
 
-### 3. Model & Performance Agent
+### 3. Model & Performance Agent (Compulsory)
 #### Setup
 1. Ensure that the __datatset/__ folder consists of:
     - engineered_df_train.parquet __OR__ engineered_df_train_pruned.parquet
@@ -181,7 +189,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     - feature_importances.json
     - results.json
 
-### 4. Evaluation
+### 4. Evaluation (Compulsory)
 #### Setup
 1. Ensure that the __Model/__ folder consists of:
     - 2 model folders containing:
