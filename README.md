@@ -154,8 +154,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 ### 1.2 Identify Dataset Quality (Optional)
 #### Setup
 1. Ensure that the __dataset/__ folder consists of:
-    - train.parquet
-    - test.parquet
+    - US_Accidents_March23.csv
 
 #### Execution
 1. Under the __FE/__ folder, run __ValidateCleaning_Reject.ipynb__ with the 2 Parquet files in the __dataset/__ folder
@@ -184,7 +183,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     - engineered_df_test.parquet __OR__ engineered_df_test_pruned.parquet
 
 #### Execution
-1. After executing __2VC_FE_Agent.ipynb__, exit the __FE/__ folder and under the __Model/__ folder, run __3_Modelling_Agent.py__
+1. After executing __2_VC_FE_Agent.ipynb__, exit the __FE/__ folder and under the __Model/__ folder, run __3_Modelling_Agent.py__
 2. User will be required to enter inputs:
     ```
     Approve? (y to proceed, n to override):
