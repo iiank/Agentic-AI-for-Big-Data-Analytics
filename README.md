@@ -87,6 +87,7 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
     C:.
     │   .env
     │   README.md
+    |   requirements.txt
     │
     ├───dataset
     │   │   US_Accidents_March23.csv
@@ -128,9 +129,9 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
             Modelling_Prompt.md
             Modelling_Skills.py
             Model_Evaluator.py
-            requirements.txt
             test_evaluation.py
     ```
+3. Enter your OpenAI Secret API key into the __.env__ file
 
 ### 1. Data Cleaning and Preparation (Compulsory)
 #### Setup
@@ -138,24 +139,21 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 2. Under the __FE/__ folder, remove the __state/__ folder containing __fe_agent_state.json__
 
 #### Execution
-1. Under the __dataset/__ folder, run all cells in __1_EDA_Model.ipynb__
+1. Under the __EDA/__ folder, run all cells in __1_EDA_Model.ipynb__
 2. 2 new Parquet files will be generated in the __dataset/__ folder:
     - train.parquet
     - test.parquet
 
 ### 1.1 Data Analysis and Visualisation (Optional)
-#### Setup
-1. Under the __dataset/__ folder, remove all Parquet files. Do not remove the original dataset __US_Accidents_March23.csv__
-
 #### Execution
-1. Under the __dataset/__ folder, run all cells in __1_EDA_Visuals.ipynb__
+1. Under the __EDA/__ folder, run all cells in __1_EDA_Visuals.ipynb__
 2. A new Parquet file will be generated in the __dataset/__ folder:
     - visual.parquet
 3. After executing __EDA_Visuals.ipynb__, run __Visualisations.ipynb__
 
 ### 1.2 Identify Dataset Quality (Optional)
 #### Setup
-1. Ensure that the __datatset/__ folder consists of:
+1. Ensure that the __dataset/__ folder consists of:
     - train.parquet
     - test.parquet
 
@@ -165,23 +163,23 @@ Under `Path`, Add 2 new variables: `%JAVA_HOME%\bin` and  `%HADOOP_HOME%\bin`
 
 ### 2. Validate Cleaning Agent and Feature Engineering Agent (Compulsory)
 #### Setup
-1. Ensure that the __datatset/__ folder consists of:
+1. Ensure that the __dataset/__ folder consists of:
     - train.parquet
     - test.parquet
 
 #### Execution
-1. After executing __1_EDA_Model.ipynb__, exit the __dataset/__ folder and under the __FE/__ folder, run all cells in __2_VC_FE_Agent.ipynb__
-2. A __state__ folder will be generated in the __FE/__ folder, containing __fe_agent_state.json__
+1. After executing __1_EDA_Model.ipynb__, exit the __EDA/__ folder and under the __FE/__ folder, run all cells in __2_VC_FE_Agent.ipynb__
+2. A __state/__ folder will be generated in the __FE/__ folder, containing __fe_agent_state.json__
 3. 2 new Parquet files will be generated under the __dataset/__ folder:
     - engineered_df_train.parquet
     - engineered_df_test.parquet
-4. Another 2 new Parquet files may be generated under the __dataset/__ folder if the Feature Engineering Agent decides to prune sparse or noisy features:
+4. 2 additional Parquet files may be generated under the __dataset/__ folder if the Feature Engineering Agent decides to prune sparse or noisy features:
     - engineered_df_train_pruned.parquet
     - engineered_df_test_pruned.parquet
 
 ### 3. Model & Performance Agent (Compulsory)
 #### Setup
-1. Ensure that the __datatset/__ folder consists of:
+1. Ensure that the __dataset/__ folder consists of:
     - engineered_df_train.parquet __OR__ engineered_df_train_pruned.parquet
     - engineered_df_test.parquet __OR__ engineered_df_test_pruned.parquet
 
