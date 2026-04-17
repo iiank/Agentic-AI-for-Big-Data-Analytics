@@ -116,7 +116,7 @@ def assemble_test_df(test_df, feature_cols):
 
 def compute_metrics(predictions_df) -> dict:
     predictions_df = predictions_df.cache()
-    predictions_df.count()  # materialise cache now
+    predictions_df.count()
 
     be = BinaryClassificationEvaluator(
         labelCol=LABEL_COL,
@@ -242,11 +242,7 @@ def save_curves(label: str, metrics: dict):
 
 
 def plot_curves(all_results: list):
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("\n  [info] matplotlib not installed — skipping plots (curve data saved to JSON)")
-        return
+    import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     fig.suptitle("Model Evaluation — ROC and PRC Curves", fontsize=14)
@@ -382,7 +378,6 @@ def main():
 
                 all_curve_results.append((f"{root.name}/{model_dir.name}", metrics))
             except Exception as e:
-
                 print(f"  [error] Evaluation failed — model may be stale (trained on different features): {e}")
 
     if all_curve_results:

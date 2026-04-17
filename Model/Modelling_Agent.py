@@ -1,8 +1,3 @@
-# Trial_Modelling_Agent.py
-# Orchestration layer for the modelling agent.
-# Defines AgentState, LangGraph nodes, LLM calls, and graph wiring.
-# Imports PySpark execution from Modelling_Skills.py.
-
 import os
 import json
 import operator
@@ -17,36 +12,28 @@ from langgraph.types import Command, interrupt
 
 from Modelling_Skills import MODEL_REGISTRY, run_training
 
-# Visual helper function (Only for printing purposes)
 def border(s):
     print()
     print(f"{'='*20} {s} {'='*20}")
-
-# ── LLM Client ────────────────────────────────────────────────────────────────
 
 load_dotenv()
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
 SKILL_PROMPT = (Path(__file__).parent / "Modelling_Prompt.md").read_text()
 
-
-# ── AgentState ────────────────────────────────────────────────────────────────
-
 class AgentState(TypedDict):
-    # Input — pass in from FE phase
+    # input
     feature_cols:          List[str]
     post_cleaning_profile: Dict[str, Any]
-    iteration:             int              # retry counter 
+    iteration:             int
 
-    # Agent outputs
-    model_selection:       Dict[str, Any]   # LLM Call 1: primary + secondary + grids
-    primary_results:       Dict[str, Any]   # training results for primary model
-    secondary_results:     Dict[str, Any]   # training results for secondary model
-    evaluation_decision:   Dict[str, Any]   # LLM Call 2: winner + narrative + next_action
+    # agent outputs
+    model_selection:       Dict[str, Any]   # call 1: primary + secondary + grids
+    primary_results:       Dict[str, Any]
+    secondary_results:     Dict[str, Any]
+    evaluation_decision:   Dict[str, Any]   # call 2: winner + narrative + next_action
     modelling_log:         Annotated[List[str], operator.add]
 
-
-# ── LLM Call ──────────────────────────────────────────────────────────────────
 
 def call_llm(user_payload: Dict) -> Dict:
     response = client.chat.completions.create(
@@ -64,7 +51,7 @@ def call_llm(user_payload: Dict) -> Dict:
     return parsed
 
 
-# ── Context Builders ──────────────────────────────────────────────────────────
+# Context builders
 
 def build_model_selection_context(state: AgentState) -> Dict:
     profile    = state["post_cleaning_profile"]
@@ -117,7 +104,7 @@ def build_evaluation_context(state: AgentState) -> Dict:
     }
 
 
-# ── LangGraph Nodes ───────────────────────────────────────────────────────────
+# langgraph nodes
 
 def model_selection_node(state: AgentState) -> dict:
     print("\n[Modelling Agent] Node: model_selection")
@@ -142,15 +129,7 @@ def model_selection_node(state: AgentState) -> dict:
 
 
 def human_review_node(state: AgentState) -> dict:
-    """
-    Human-in-the-loop gate before expensive training.
-    Pauses with interrupt() until caller resumes with Command(resume={...}).
-
-    Resume options:
-      {"approved": True}
-      {"approved": False, "override_primary": "ModelName", "override_secondary": "ModelName"}
-    """
-    decision = dict(state["model_selection"])  # copy — do not mutate state directly
+    decision = dict(state["model_selection"])
 
     human_input = interrupt({
         "primary_model":        decision["primary_model"],
@@ -190,9 +169,8 @@ def human_review_node(state: AgentState) -> dict:
         ],
     }
 
-
+# call 1
 def training_node(state: AgentState) -> dict:
-    """Trains both models sequentially using run_training() from Modelling_Skills.py."""
     decision    = state["model_selection"]
     updates     = {}
     log_entries = []
@@ -223,9 +201,8 @@ def training_node(state: AgentState) -> dict:
 
     return {**updates, "modelling_log": log_entries}
 
-
+# call 2
 def evaluation_node(state: AgentState) -> dict:
-    """LLM Call 2. Compares both AUC results, picks winner, generates narrative."""
     print("\n[Modelling Agent] Node: evaluation")
 
     context  = build_evaluation_context(state)
@@ -251,7 +228,7 @@ def evaluation_node(state: AgentState) -> dict:
     }
 
 
-# ── Routing ──────────────────────────────────────────────────────────────────
+# Routing
 
 def route_after_evaluation(state: AgentState) -> str:
     decision  = state.get("evaluation_decision", {})
@@ -263,7 +240,7 @@ def route_after_evaluation(state: AgentState) -> str:
     return END
 
 
-# ── Build and Compile Graph ───────────────────────────────────────────────────
+# Build LangGraph graph
 
 workflow = StateGraph(AgentState)
 
@@ -286,8 +263,7 @@ checkpointer    = MemorySaver()
 modelling_agent = workflow.compile(checkpointer=checkpointer)
 print("Modelling agent graph compiled.")
 
-# ── Run ───────────────────────────────────────────────────────────────────────
-# Load your engineered parquet and pass it in as df below.
+# RUNNING
 
 from pyspark.sql import SparkSession
 from pathlib import Path
@@ -368,7 +344,7 @@ border("Loading FE parquet")
 print(f"Loaded Train Data: {train_df.count():,} rows")
 print(f"Loaded Test Data:  {test_df.count():,} rows")
 
-# ── Load FE agent state ───────────────────────────────────────────────────────
+# Load FE state
 
 FE_STATE_PATH = PROJECT_ROOT / "FE/state" / "fe_agent_state.json"
 if not FE_STATE_PATH.exists():
@@ -377,10 +353,9 @@ if not FE_STATE_PATH.exists():
 with open(FE_STATE_PATH) as f:
     fe_state = json.load(f)
 
-# Exclude high_severity — it is derived from the target and causes leakage 
 feature_cols = [c for c in fe_state["feature_columns"] if c != "high_severity"]
 
-# Derive binary class distribution from FE stats report
+# Derive binary class distribution
 stats      = fe_state["feature_stats_report"]
 num_rows   = stats["structural_overview"]["total_rows"]
 high_ratio = stats["boolean_and_binary_analysis"]["high_severity"]["true_ratio"]
@@ -416,7 +391,7 @@ config = {"configurable": {"thread_id": "modelling_run_4"}}
 
 modelling_agent.invoke(initial_state, config=config)
 
-# Handle human_review interrupt
+# Handle human review interrupt()
 while modelling_agent.get_state(config).next:
     snapshot      = modelling_agent.get_state(config)
     interrupt_val = snapshot.tasks[0].interrupts[0].value
@@ -448,7 +423,7 @@ while modelling_agent.get_state(config).next:
 
     final_state = modelling_agent.get_state(config).values
 
-    # ── Print Results ─────────────────────────────────────────────────────────
+    # Print results
     print("\n" + "=" * 60)
     print("MODELLING AGENT COMPLETE")
     print("=" * 60)
