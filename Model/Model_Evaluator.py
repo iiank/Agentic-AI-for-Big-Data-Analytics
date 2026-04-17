@@ -44,9 +44,10 @@ MODEL_CLASS_MAP = {
 
 # Saved model root dirs to evaluate — add more paths here as needed
 MODEL_ROOTS = [
-    Path(__file__).parent / "saved_models_8combins_0.8464",
-    Path(__file__).parent / "saved_models_72combins",
+    # Path(__file__).parent / "saved_models_8combins_0.8464",
+    # Path(__file__).parent / "saved_models_72combins",
     # Path(__file__).parent / "saved_models_test1combi",
+    Path(__file__).parent / "model_72combi_complete",
 ]
 
 PROJECT_ROOT    = Path(__file__).parent.parent
@@ -207,6 +208,11 @@ def compute_metrics(predictions_df) -> dict:
     tn = int(cm.get((0, 0), 0))
     fn = int(cm.get((1, 0), 0))
 
+    total = tp + fp + tn + fn
+    true_precision = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
+    true_recall    = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
+    true_accuracy  = round((tp + tn) / total, 4) if total > 0 else 0.0
+
     # ── ROC and PRC curves (driver-side, sampled) ─────────────────────────────
     # Collect a small sample to the driver and compute curves with sklearn.
     # Avoids pushing 1.4M rows through the Python RDD worker (causes OOM/crash).
@@ -240,15 +246,18 @@ def compute_metrics(predictions_df) -> dict:
         roc_curve, prc_curve = [], []
 
     return {
-        "auc_roc":          auc_roc,
-        "auc_prc":          auc_prc,
-        "f1":               f1,
+        "auc_roc":           auc_roc,
+        "auc_prc":           auc_prc,
+        "f1":                f1,
         "weighted_precision": precision,
-        "weighted_recall":  recall,
-        "accuracy":         accuracy,
-        "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
-        "roc_curve":        roc_curve,
-        "prc_curve":        prc_curve,
+        "weighted_recall":   recall,
+        "accuracy":          accuracy,
+        "true_precision":    true_precision,
+        "true_recall":       true_recall,
+        "true_accuracy":     true_accuracy,
+        "confusion_matrix":  {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+        "roc_curve":         roc_curve,
+        "prc_curve":         prc_curve,
     }
 
 
@@ -261,12 +270,12 @@ def print_report(label: str, spark_class: str, results_json: dict, metrics: dict
     if results_json:
         print(f"  Saved best params : {results_json.get('best_params', {})}")
     print(f"{'─'*55}")
-    print(f"  AUC-ROC            : {metrics['auc_roc']}")
-    print(f"  AUC-PRC            : {metrics['auc_prc']}")
-    print(f"  F1 (weighted)      : {metrics['f1']}")
-    print(f"  Precision (wtd)    : {metrics['weighted_precision']}")
-    print(f"  Recall (wtd)       : {metrics['weighted_recall']}")
-    print(f"  Accuracy           : {metrics['accuracy']}")
+    print(f"  AUC-ROC                        : {metrics['auc_roc']}")
+    print(f"  AUC-PRC                        : {metrics['auc_prc']}")
+    print(f"  F1 (weighted)                  : {metrics['f1']}")
+    print(f"  Precision  — weighted / true   : {metrics['weighted_precision']} / {metrics['true_precision']}")
+    print(f"  Recall     — weighted / true   : {metrics['weighted_recall']} / {metrics['true_recall']}")
+    print(f"  Accuracy   — weighted / true   : {metrics['accuracy']} / {metrics['true_accuracy']}")
     cm = metrics["confusion_matrix"]
     print(f"\n  Confusion Matrix (on test set):")
     print(f"                  Predicted 0   Predicted 1")
@@ -461,7 +470,12 @@ def main():
 
     # Summary table
     border("Summary")
-    header = f"{'Model':<50}  {'AUC-ROC':>8}  {'AUC-PRC':>8}  {'F1':>8}  {'Precision':>10}  {'Recall':>8}  {'Accuracy':>9}"
+    header = (
+        f"{'Model':<50}  {'AUC-ROC':>8}  {'AUC-PRC':>8}  {'F1':>8}"
+        f"  {'Prec(wtd)':>10}  {'Prec(true)':>10}"
+        f"  {'Rec(wtd)':>8}  {'Rec(true)':>9}"
+        f"  {'Acc(wtd)':>8}  {'Acc(true)':>9}"
+    )
     print(header)
     print("─" * len(header))
     for label, metrics in all_curve_results:
@@ -470,9 +484,12 @@ def main():
             f"{metrics['auc_roc']:>8}  "
             f"{metrics['auc_prc']:>8}  "
             f"{metrics['f1']:>8}  "
-            f"{metrics['weighted_precision']:>10}  "                     
-            f"{metrics['weighted_recall']:>8}  "      
-            f"{metrics['accuracy']:>9}"
+            f"{metrics['weighted_precision']:>10}  "
+            f"{metrics['true_precision']:>10}  "
+            f"{metrics['weighted_recall']:>8}  "
+            f"{metrics['true_recall']:>9}  "
+            f"{metrics['accuracy']:>8}  "
+            f"{metrics['true_accuracy']:>9}"
         )
 
     spark.stop()
